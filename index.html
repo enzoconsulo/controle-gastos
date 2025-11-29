@@ -9,8 +9,19 @@
 <body>
   <header class="title">
     <h1>Controle de Gastos (modelo Excel)</h1>
-    <p class="muted">Dashboard fiel ao Excel — use as abas para navegar.</p>
+    <p class="muted">Mês por índice; investimentos/guardado unificados; gráficos detalhados no Dashboard.</p>
   </header>
+
+  <!-- month incrementer (numérico) -->
+  <div class="month-incrementer">
+    <button id="prev-month" class="small-btn">&lt;</button>
+    <div class="month-display">
+      <div>Índice do mês</div>
+      <div id="month-index" class="month-index">0</div>
+      <div id="month-label" class="month-label"></div>
+    </div>
+    <button id="next-month" class="small-btn">&gt;</button>
+  </div>
 
   <nav class="tabs">
     <button data-tab="dashboard" class="tab-btn active">Dashboard</button>
@@ -26,7 +37,7 @@
         <table class="accounts-table">
           <thead>
             <tr>
-              <th>Conta</th><th>Saldo</th><th>Gasto Crédito</th><th>Gasto VR</th><th>Investimento</th><th>Guardado</th>
+              <th>Conta</th><th>Saldo</th><th>Gasto Crédito (mês)</th><th>Gasto VR (mês)</th><th>Guardado</th>
             </tr>
           </thead>
           <tbody id="accounts-body"></tbody>
@@ -35,10 +46,15 @@
 
       <div class="panel-middle">
         <div class="left-box">
-          <canvas id="gasto-credito-chart" width="420" height="260"></canvas>
+          <h3>Gasto Crédito — por conta (mês)</h3>
+          <canvas id="gasto-credito-chart" width="420" height="240"></canvas>
+
+          <h3 style="margin-top:18px">Gasto por categoria (mês)</h3>
+          <canvas id="category-pie-chart" width="420" height="240"></canvas>
         </div>
+
         <div class="right-box">
-          <h3>Disponível</h3>
+          <h3>Visão geral (mês)</h3>
           <div class="yellow-grid">
             <div class="y-row"><span>Crédito</span><strong id="avail-credit">R$ 0,00</strong></div>
             <div class="y-row"><span>VR</span><strong id="avail-vr">R$ 0,00</strong></div>
@@ -50,6 +66,9 @@
             <strong>Crédito + Débito</strong>
             <div id="credit-debit-small">R$ 0,00</div>
           </div>
+
+          <h3 style="margin-top:18px">Tendência (6 meses)</h3>
+          <canvas id="monthly-line-chart" width="300" height="200"></canvas>
         </div>
       </div>
     </section>
@@ -58,25 +77,28 @@
     <section id="tab-input" class="tab-panel inputs">
       <h2>Novo gasto / entrada</h2>
 
-      <!-- Totais (definir no início do mês) -->
-      <div class="month-totals">
-        <div class="tot-block">
-          <label>Crédito (total)</label>
-          <input id="input-credit-total" type="number" step="0.01" />
-        </div>
-        <div class="tot-block">
-          <label>VR (total)</label>
-          <input id="input-vr-total" type="number" step="0.01" />
-        </div>
-        <div class="tot-block">
-          <label>Entrada (renda do mês)</label>
-          <input id="input-entrada-total" type="number" step="0.01" />
+      <!-- Totais do mês (separado, visualmente) -->
+      <div class="monthly-config">
+        <h4>Configurações do mês (editar só no início do mês)</h4>
+        <div class="month-totals">
+          <div class="tot-block">
+            <label>Crédito (total do mês)</label>
+            <input id="input-credit-total" type="number" step="0.01" />
+          </div>
+          <div class="tot-block">
+            <label>VR (total do mês)</label>
+            <input id="input-vr-total" type="number" step="0.01" />
+          </div>
+          <div class="tot-block">
+            <label>Entrada (renda do mês)</label>
+            <input id="input-entrada-total" type="number" step="0.01" />
+          </div>
         </div>
       </div>
 
       <form id="expense-form" class="form-grid">
         <div class="form-field">
-          <label>Data</label>
+          <label>Data (hoje por padrão)</label>
           <input type="date" id="exp-date" />
         </div>
         <div class="form-field">
@@ -110,6 +132,7 @@
             <option value="lazer">Lazer</option>
             <option value="saude">Saúde</option>
             <option value="assinaturas">Assinaturas</option>
+            <option value="investimento">Investimento</option>
             <option value="outros">Outros</option>
           </select>
         </div>
@@ -134,14 +157,51 @@
       </div>
     </section>
 
-    <!-- INVESTIMENTOS -->
+    <!-- INVESTIMENTOS (guardado unificado) -->
     <section id="tab-invest" class="tab-panel panel">
-      <h2>Investimentos</h2>
+      <h2>Guardado (Investimentos)</h2>
+
+      <div class="invest-actions">
+        <form id="invest-form" class="invest-form">
+          <div class="form-row">
+            <label>Conta</label>
+            <select id="invest-account"></select>
+          </div>
+          <div class="form-row">
+            <label>Valor (R$)</label>
+            <input id="invest-amount" type="number" step="0.01" />
+          </div>
+          <div class="form-row">
+            <label>Ação</label>
+            <select id="invest-action">
+              <option value="investir">Investir (guardar)</option>
+              <option value="guardar">Guardar (guardar)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Descrição (opcional)</label>
+            <input id="invest-desc" type="text" />
+          </div>
+          <div class="form-row">
+            <button id="invest-submit" class="btn-primary" type="button">Executar</button>
+          </div>
+        </form>
+      </div>
+
+      <h3>Resumo de Guardado</h3>
       <div class="invest-grid">
         <div class="invest-list" id="invest-list"></div>
         <div class="invest-summary yellow-grid">
           <div class="y-row"><span>Guardado Total</span><strong id="guardado-total">R$ 0,00</strong></div>
         </div>
+      </div>
+
+      <h3 style="margin-top:18px">Log de Guardado (Investimentos)</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Data</th><th>Conta</th><th>Ação</th><th>Valor</th><th>Descrição</th></tr></thead>
+          <tbody id="invest-log-body"></tbody>
+        </table>
       </div>
     </section>
 
@@ -153,6 +213,10 @@
         <select id="log-account-filter">
           <option value="all">Todas</option>
         </select>
+
+        <label>Mostrar apenas mês ativo</label>
+        <input id="log-show-only-month" type="checkbox" checked />
+        <label class="muted small">(se desmarcar, mostra todo o histórico)</label>
       </div>
 
       <div class="table-wrapper">
