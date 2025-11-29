@@ -11,7 +11,7 @@ const DEFAULT = {
   expenses: [],
   investments: [],
   startEntries: [],
-  investBoxes: [],      // caixinhas
+  investBoxes: [],
   meta: { baseMonth: null, activeOffset: 0 }
 };
 
@@ -32,6 +32,8 @@ function loadState(){
       if(!s.investBoxes) s.investBoxes = [];
       if(!s.meta) s.meta = DEFAULT.meta;
       if(!s.meta.baseMonth) s.meta.baseMonth = new Date().toISOString().slice(0,7);
+      if(!s.expenses) s.expenses = [];
+      if(!s.investments) s.investments = [];
       return s;
     }
   }catch(e){console.error(e);}
@@ -55,12 +57,14 @@ function getActiveMonth(){ return computeMonthFromOffset(state.meta.activeOffset
 function monthlySumsByAccount(month){
   const map = {};
   state.accounts.forEach(a => map[a.id] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 });
-  state.expenses.filter(e => monthOf(e.date) === month).forEach(e=>{
-    if(!map[e.accountId]) map[e.accountId] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 };
-    if(e.type === 'credito') map[e.accountId].gasto_credito += Number(e.amount||0);
-    else if(e.type === 'vr') map[e.accountId].gasto_vr += Number(e.amount||0);
-    else if(e.type === 'saldo') map[e.accountId].gasto_saldo += Number(e.amount||0);
-  });
+  state.expenses
+    .filter(e => monthOf(e.date) === month)
+    .forEach(e=>{
+      if(!map[e.accountId]) map[e.accountId] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 };
+      if(e.type === 'credito') map[e.accountId].gasto_credito += Number(e.amount||0);
+      else if(e.type === 'vr') map[e.accountId].gasto_vr += Number(e.amount||0);
+      else if(e.type === 'saldo') map[e.accountId].gasto_saldo += Number(e.amount||0);
+    });
   return map;
 }
 
@@ -85,6 +89,7 @@ let gastoChart=null, categoryChart=null, monthlyChart=null, entradaChart=null;
 
 function renderAccountsTable(){
   const tbody = document.getElementById('accounts-body');
+  if(!tbody) return;
   tbody.innerHTML = '';
   const month = getActiveMonth();
   const sums = monthlySumsByAccount(month);
@@ -92,8 +97,6 @@ function renderAccountsTable(){
   state.accounts.forEach(a => {
     const s = sums[a.id] || { gasto_credito:0, gasto_vr:0, gasto_saldo:0 };
     const isCaju = a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr');
-
-    // Só mostra valor de VR para a conta Caju; demais ficam vazios
     const vrCellContent = isCaju ? money(s.gasto_vr) : '';
 
     const tr = document.createElement('tr');
@@ -131,7 +134,9 @@ function baseChartOptions(){
 }
 
 function renderGastoCreditoChart(){
-  const ctx = document.getElementById('gasto-credito-chart').getContext('2d');
+  const el = document.getElementById('gasto-credito-chart');
+  if(!el) return;
+  const ctx = el.getContext('2d');
   const month = getActiveMonth();
   const sums = monthlySumsByAccount(month);
   const labels = state.accounts.map(a=>a.name);
@@ -145,13 +150,17 @@ function renderGastoCreditoChart(){
 }
 
 function renderCategoryPie(){
-  const ctx = document.getElementById('category-pie-chart').getContext('2d');
+  const el = document.getElementById('category-pie-chart');
+  if(!el) return;
+  const ctx = el.getContext('2d');
   const month = getActiveMonth();
   const map = {};
-  state.expenses.filter(e => monthOf(e.date) === month).forEach(e=>{
-    if(e.type === 'entrada') return;
-    map[e.category] = (map[e.category]||0) + Number(e.amount||0);
-  });
+  state.expenses
+    .filter(e => monthOf(e.date) === month)
+    .forEach(e=>{
+      if(e.type === 'entrada') return;
+      map[e.category] = (map[e.category]||0) + Number(e.amount||0);
+    });
   const labels = Object.keys(map);
   const data = labels.map(k=>map[k]);
   if(categoryChart) categoryChart.destroy();
@@ -179,7 +188,9 @@ function monthlyTotalsLastN(n=6){
   return arr;
 }
 function renderMonthlyLine(){
-  const ctx = document.getElementById('monthly-line-chart').getContext('2d');
+  const el = document.getElementById('monthly-line-chart');
+  if(!el) return;
+  const ctx = el.getContext('2d');
   const arr = monthlyTotalsLastN(6);
   const labels = arr.map(x=>x.month), data = arr.map(x=>x.total);
   if(monthlyChart) monthlyChart.destroy();
@@ -202,18 +213,24 @@ function renderMonthlyLine(){
 /* entradas */
 function getEntradasDistribution(month, includeStart){
   const map = {};
-  state.expenses.filter(e => monthOf(e.date) === month && e.type === 'entrada').forEach(e=>{
-    map[e.accountId] = (map[e.accountId]||0) + Number(e.amount||0);
-  });
-  if(includeStart && state.startEntries){
-    state.startEntries.filter(s => s.month === month).forEach(s=>{
-      map[s.accountId] = (map[s.accountId]||0) + Number(s.amount||0);
+  state.expenses
+    .filter(e => monthOf(e.date) === month && e.type === 'entrada')
+    .forEach(e=>{
+      map[e.accountId] = (map[e.accountId]||0) + Number(e.amount||0);
     });
+  if(includeStart && state.startEntries){
+    state.startEntries
+      .filter(s => s.month === month)
+      .forEach(s=>{
+        map[s.accountId] = (map[s.accountId]||0) + Number(s.amount||0);
+      });
   }
   return map;
 }
 function renderEntradaPie(){
-  const ctx = document.getElementById('entrada-pie-chart').getContext('2d');
+  const el = document.getElementById('entrada-pie-chart');
+  if(!el) return;
+  const ctx = el.getContext('2d');
   const month = getActiveMonth();
   const includeStart = document.getElementById('include-start-entrada').checked;
   const map = getEntradasDistribution(month, includeStart);
@@ -236,7 +253,7 @@ function renderEntradaPie(){
 function populateAccountSelects(){
   const sel = document.getElementById('exp-account');
   const selLog = document.getElementById('log-account-filter');
-  const selInvest = document.getElementById('invest-account'); // pode não existir mais, mas não faz mal
+  const selInvest = document.getElementById('invest-account');
   const boxSel = document.getElementById('box-account');
 
   if(sel) sel.innerHTML='';
@@ -357,7 +374,6 @@ function renderInvestBoxes(){
   }
 
   state.investBoxes.forEach(box=>{
-    const acc = state.accounts.find(a=>a.id===box.accountId);
     const card = document.createElement('div');
     card.className = 'box-card';
     card.innerHTML = `
@@ -459,14 +475,14 @@ function renderLogTable(){
   });
 }
 
-/* efeitos dos lançamentos */
+/* efeitos dos lançamentos (inclui VR debitando saldo do Caju) */
 function applyExpenseEffects(exp){
-  // Se for VR, força sempre para a conta Caju
   if(exp.type === 'vr'){
     const caju = state.accounts.find(a =>
-      a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr')
+      a.name.toLowerCase().includes('caju') ||
+      a.name.toLowerCase().includes('vr')
     );
-    if(caju) {
+    if(caju){
       exp.accountId = caju.id;
     }
   }
@@ -475,18 +491,15 @@ function applyExpenseEffects(exp){
   if(!acc) return;
 
   if(exp.type === 'saldo'){
-    // débito normal no saldo
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
   }
   else if(exp.type === 'entrada'){
-    // entrada: soma no saldo e, se categoria for investimento, soma no guardado também
     acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
     if(exp.category === 'investimento'){
       acc.guardado = Number(acc.guardado||0) + Number(exp.amount||0);
     }
   }
   else if(exp.type === 'vr'){
-    // gasto em VR: DEBITA do saldo do Caju também
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
   }
 }
@@ -496,18 +509,15 @@ function applyExpenseReverse(exp){
   if(!acc) return;
 
   if(exp.type === 'saldo'){
-    // desfaz débito de saldo
     acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
   }
   else if(exp.type === 'entrada'){
-    // desfaz entrada
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
     if(exp.category === 'investimento'){
       acc.guardado = Number(acc.guardado||0) - Number(exp.amount||0);
     }
   }
   else if(exp.type === 'vr'){
-    // desfaz gasto em VR: devolve pro saldo do Caju
     acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
   }
 }
@@ -541,7 +551,6 @@ function handleCreateBox(){
   updateAll();
 }
 
-/* submit gasto/entrada */
 function handleExpenseSubmit(e){
   e.preventDefault();
   const date = document.getElementById('exp-date').value || todayISO();
@@ -565,9 +574,18 @@ function handleExpenseSubmit(e){
 
   const newExp = { id: Date.now().toString(), date, desc, amount, type, accountId, method, category };
   applyExpenseEffects(newExp);
+  if(!Array.isArray(state.expenses)) state.expenses = [];
   state.expenses.push(newExp);
   saveState();
-  location.reload();
+  updateAll();
+
+  // limpa campos principais
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-method').value = '';
+
+  // depois de registrar, vai para o dashboard
+  activateTab('dashboard');
 }
 
 /* início do mês */
@@ -665,6 +683,17 @@ function handleBackupImport(e){
   reader.readAsText(file);
 }
 
+function activateTab(tabName){
+  // ativa o botão da aba
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  // mostra o painel correspondente
+  document.querySelectorAll('.tab-panel').forEach(panel=>{
+    panel.classList.toggle('active', panel.id === 'tab-' + tabName);
+  });
+}
+
 /* init */
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -697,7 +726,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderEditableAccounts();
   updateAll();
 
-  // Quando escolher "Gasto no VR (Caju)", selecionar automaticamente o banco Caju
+  const expDate = document.getElementById('exp-date');
+  if(expDate) expDate.value = todayISO();
+  const expForm = document.getElementById('expense-form');
+  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
+
+  // Auto selecionar Caju quando tipo = "vr"
   const expTypeSel = document.getElementById('exp-type');
   const expAccountSel = document.getElementById('exp-account');
   if (expTypeSel && expAccountSel) {
