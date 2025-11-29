@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Controle de Gastos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Controle de Gastos</h1>
+    <p>Veja quanto você gasta, por categoria, e quanto ainda está sobrando.</p>
+  </header>
+
+  <main class="container">
+    <!-- RESUMO -->
+    <section class="card">
+      <h2>Resumo do mês</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span>Total da meta</span>
+          <strong id="total-budget">R$ 0,00</strong>
+        </div>
+        <div class="summary-item">
+          <span>Total gasto</span>
+          <strong id="total-spent">R$ 0,00</strong>
+        </div>
+        <div class="summary-item">
+          <span>Está sobrando</span>
+          <strong id="remaining-total">R$ 0,00</strong>
+        </div>
+      </div>
+    </section>
+
+    <!-- METAS POR CATEGORIA -->
+    <section class="card">
+      <div class="card-header">
+        <h2>Metas de gasto por categoria</h2>
+        <button id="save-budgets-btn" class="btn-primary">Salvar metas</button>
+      </div>
+      <p class="muted">
+        Ajuste os valores de meta que fazem sentido pra você. Isso é salvo no navegador (localStorage).
+      </p>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Meta (R$)</th>
+              <th>Gasto (R$)</th>
+              <th>Restante (R$)</th>
+            </tr>
+          </thead>
+          <tbody id="category-budget-body">
+            <!-- preenchido via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ADICIONAR GASTO -->
+    <section class="card">
+      <h2>Adicionar gasto</h2>
+      <form id="expense-form" class="form-grid">
+        <div class="form-field">
+          <label for="expense-date">Data</label>
+          <input type="date" id="expense-date" required />
+        </div>
+        <div class="form-field">
+          <label for="expense-description">Descrição</label>
+          <input type="text" id="expense-description" placeholder="Ex: Mercado, Uber..." required />
+        </div>
+        <div class="form-field">
+          <label for="expense-category">Categoria</label>
+          <select id="expense-category" required>
+            <!-- preenchido via JS -->
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="expense-payment">Forma de pagamento</label>
+          <select id="expense-payment">
+            <option value="Nubank">Nubank</option>
+            <option value="Sicoob">Sicoob</option>
+            <option value="Itaú">Itaú</option>
+            <option value="Caju">Caju</option>
+            <option value="VR">VR</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="expense-amount">Valor (R$)</label>
+          <input type="number" step="0.01" min="0" id="expense-amount" required />
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Adicionar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- LISTA DE GASTOS -->
+    <section class="card">
+      <div class="card-header">
+        <h2>Gastos registrados</h2>
+        <button id="clear-expenses-btn" class="btn-danger">Limpar todos</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Descrição</th>
+              <th>Categoria</th>
+              <th>Pagamento</th>
+              <th>Valor (R$)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="expenses-body">
+            <!-- preenchido via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- GRÁFICOS -->
+    <section class="card">
+      <h2>Visão visual</h2>
+      <div class="charts-grid">
+        <div>
+          <h3>Gasto por categoria</h3>
+          <canvas id="expenses-by-category-chart"></canvas>
+        </div>
+        <div>
+          <h3>Quanto falta em cada categoria</h3>
+          <canvas id="remaining-by-category-chart"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
