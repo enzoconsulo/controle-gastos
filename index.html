@@ -9,10 +9,9 @@
 <body>
   <header class="title">
     <h1>Controle de Gastos (modelo Excel)</h1>
-    <p class="muted">Mês por índice; investimentos/guardado unificados; gráficos detalhados no Dashboard.</p>
+    <p class="muted">Mês por índice • VR → Caju (início do mês) • Crédito global disponível só no quadro amarelo</p>
   </header>
 
-  <!-- month incrementer (numérico) -->
   <div class="month-incrementer">
     <button id="prev-month" class="small-btn">&lt;</button>
     <div class="month-display">
@@ -26,6 +25,7 @@
   <nav class="tabs">
     <button data-tab="dashboard" class="tab-btn active">Dashboard</button>
     <button data-tab="input" class="tab-btn">Input</button>
+    <button data-tab="inicio" class="tab-btn">Início do Mês</button>
     <button data-tab="invest" class="tab-btn">Investimentos</button>
     <button data-tab="log" class="tab-btn">Log</button>
   </nav>
@@ -37,7 +37,11 @@
         <table class="accounts-table">
           <thead>
             <tr>
-              <th>Conta</th><th>Saldo</th><th>Gasto Crédito (mês)</th><th>Gasto VR (mês)</th><th>Guardado</th>
+              <th>Conta</th>
+              <th>Saldo</th>
+              <th>Gasto Crédito (mês)</th>
+              <th>Gasto VR (mês)</th>
+              <th>Guardado</th>
             </tr>
           </thead>
           <tbody id="accounts-body"></tbody>
@@ -47,28 +51,37 @@
       <div class="panel-middle">
         <div class="left-box">
           <h3>Gasto Crédito — por conta (mês)</h3>
-          <canvas id="gasto-credito-chart" width="420" height="240"></canvas>
+          <canvas id="gasto-credito-chart" width="420" height="180"></canvas>
 
-          <h3 style="margin-top:18px">Gasto por categoria (mês)</h3>
-          <canvas id="category-pie-chart" width="420" height="240"></canvas>
+          <div style="display:flex;gap:12px;align-items:center;margin-top:12px">
+            <h3 style="margin:0">Entradas — distribuição (mês)</h3>
+            <label style="margin-left:auto;font-size:0.85rem;color:var(--muted)">
+              <input id="include-start-entrada" type="checkbox" checked/> incluir Entrada inicial
+            </label>
+          </div>
+          <canvas id="entrada-pie-chart" width="420" height="180"></canvas>
+
+          <h3 style="margin-top:12px">Gasto por categoria (mês)</h3>
+          <canvas id="category-pie-chart" width="420" height="180"></canvas>
         </div>
 
         <div class="right-box">
           <h3>Visão geral (mês)</h3>
           <div class="yellow-grid">
-            <div class="y-row"><span>Crédito</span><strong id="avail-credit">R$ 0,00</strong></div>
-            <div class="y-row"><span>VR</span><strong id="avail-vr">R$ 0,00</strong></div>
+            <div class="y-row"><span>Crédito (soma disponível)</span><strong id="avail-credit">R$ 0,00</strong></div>
+            <div class="y-row"><span>VR (disponível)</span><strong id="avail-vr">R$ 0,00</strong></div>
             <div class="y-row"><span>Saldo</span><strong id="avail-saldo">R$ 0,00</strong></div>
             <div class="y-row"><span>Guardado</span><strong id="avail-guardado">R$ 0,00</strong></div>
           </div>
 
-          <div class="small-box">
+          <div class="small-box" style="margin-top:10px">
             <strong>Crédito + Débito</strong>
             <div id="credit-debit-small">R$ 0,00</div>
           </div>
 
-          <h3 style="margin-top:18px">Tendência (6 meses)</h3>
-          <canvas id="monthly-line-chart" width="300" height="200"></canvas>
+          <!-- gráfico de crédito disponível por conta foi removido -->
+          <h3 style="margin-top:12px">Tendência (6 meses)</h3>
+          <canvas id="monthly-line-chart" width="300" height="140"></canvas>
         </div>
       </div>
     </section>
@@ -77,53 +90,20 @@
     <section id="tab-input" class="tab-panel inputs">
       <h2>Novo gasto / entrada</h2>
 
-      <!-- Totais do mês (separado, visualmente) -->
-      <div class="monthly-config">
-        <h4>Configurações do mês (editar só no início do mês)</h4>
-        <div class="month-totals">
-          <div class="tot-block">
-            <label>Crédito (total do mês)</label>
-            <input id="input-credit-total" type="number" step="0.01" />
-          </div>
-          <div class="tot-block">
-            <label>VR (total do mês)</label>
-            <input id="input-vr-total" type="number" step="0.01" />
-          </div>
-          <div class="tot-block">
-            <label>Entrada (renda do mês)</label>
-            <input id="input-entrada-total" type="number" step="0.01" />
-          </div>
-        </div>
-      </div>
-
       <form id="expense-form" class="form-grid">
-        <div class="form-field">
-          <label>Data (hoje por padrão)</label>
-          <input type="date" id="exp-date" />
-        </div>
-        <div class="form-field">
-          <label>Descrição (opcional)</label>
-          <input type="text" id="exp-desc" placeholder="Ex: Mercado, Uber..." />
-        </div>
-        <div class="form-field">
-          <label>Valor (R$)</label>
-          <input type="number" step="0.01" id="exp-amount" required/>
-        </div>
-        <div class="form-field">
-          <label>Tipo (ação)</label>
+        <div class="form-field"><label>Data (hoje)</label><input type="date" id="exp-date" /></div>
+        <div class="form-field"><label>Descrição (opcional)</label><input type="text" id="exp-desc" placeholder="Ex: Mercado, Uber..." /></div>
+        <div class="form-field"><label>Valor (R$)</label><input type="number" step="0.01" id="exp-amount" required/></div>
+        <div class="form-field"><label>Tipo</label>
           <select id="exp-type">
-            <option value="saldo">Debitar Saldo</option>
-            <option value="credito">Debitar Crédito</option>
-            <option value="vr">Debitar VR</option>
-            <option value="entrada">Entrada (depositar)</option>
+            <option value="saldo">Debitar Saldo (usa conta escolhida)</option>
+            <option value="credito">Debitar Crédito (usa conta escolhida)</option>
+            <option value="vr">Debitar VR (sempre será associado à conta Caju)</option>
+            <option value="entrada">Entrada (depositar — escolha a conta)</option>
           </select>
         </div>
-        <div class="form-field">
-          <label>Banco / Conta</label>
-          <select id="exp-account"></select>
-        </div>
-        <div class="form-field">
-          <label>Categoria</label>
+        <div class="form-field"><label>Banco / Conta</label><select id="exp-account"></select></div>
+        <div class="form-field"><label>Categoria</label>
           <select id="exp-category">
             <option value="alimentacao">Alimentação</option>
             <option value="gasolina">Gasolina</option>
@@ -136,103 +116,89 @@
             <option value="outros">Outros</option>
           </select>
         </div>
-        <div class="form-field">
-          <label>Forma (opcional)</label>
-          <input type="text" id="exp-method" placeholder="Ex: Cartão, Dinheiro"/>
-        </div>
-
-        <div class="form-actions">
-          <button class="btn-primary" type="submit">Registrar</button>
-        </div>
+        <div class="form-field"><label>Forma (opcional)</label><input type="text" id="exp-method" placeholder="Cartão, Dinheiro..." /></div>
+        <div class="form-actions"><button class="btn-primary" type="submit">Registrar</button></div>
       </form>
 
-      <hr style="margin:16px 0; border:0; border-top:1px solid rgba(255,255,255,0.04)"/>
+      <hr style="margin:14px 0; border-top:1px solid rgba(255,255,255,0.04)"/>
 
-      <h3>Linhas longas (editar manual — alimentam o dashboard)</h3>
+      <h3>Linhas longas (editar manual)</h3>
       <div id="editable-accounts" class="editable-accounts"></div>
 
       <div class="actions">
         <button id="save-btn" class="btn">Salvar</button>
-        <button id="reset-btn" class="btn danger">Resetar valores Excel</button>
+        <button id="reset-btn" class="btn danger">Zerar tudo</button>
       </div>
     </section>
 
-    <!-- INVESTIMENTOS (guardado unificado) -->
+    <!-- INÍCIO DO MÊS -->
+    <section id="tab-inicio" class="tab-panel inputs">
+      <h2>Dados do Início do Mês</h2>
+      <p class="muted">Defina aqui o VR (Caju), a Entrada inicial do mês e o crédito global. Gastos no crédito são separados por banco, mas o limite é global.</p>
+
+      <div class="monthly-config">
+        <div class="month-totals">
+          <div class="tot-block">
+            <label>VR total (Caju)</label>
+            <input id="inicio-vr-total" type="number" step="0.01" />
+          </div>
+          <div class="tot-block">
+            <label>Entrada inicial do mês (valor)</label>
+            <input id="inicio-entrada-total" type="number" step="0.01" />
+          </div>
+          <div class="tot-block">
+            <label>Crédito global (limite do mês)</label>
+            <input id="inicio-credit-global" type="number" step="0.01" />
+          </div>
+        </div>
+
+        <h3 style="margin-top:12px">Créditos por conta (Nubank / Sicoob / Itau)</h3>
+        <div id="inicio-credits" class="editable-accounts"></div>
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button id="apply-start-month" class="btn">Aplicar dados do início do mês</button>
+          <button id="clear-start-month" class="btn danger">Limpar campos</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- INVESTIMENTOS -->
     <section id="tab-invest" class="tab-panel panel">
       <h2>Guardado (Investimentos)</h2>
 
       <div class="invest-actions">
         <form id="invest-form" class="invest-form">
-          <div class="form-row">
-            <label>Conta</label>
-            <select id="invest-account"></select>
-          </div>
-          <div class="form-row">
-            <label>Valor (R$)</label>
-            <input id="invest-amount" type="number" step="0.01" />
-          </div>
-          <div class="form-row">
-            <label>Ação</label>
-            <select id="invest-action">
-              <option value="investir">Investir (guardar)</option>
-              <option value="guardar">Guardar (guardar)</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label>Descrição (opcional)</label>
-            <input id="invest-desc" type="text" />
-          </div>
-          <div class="form-row">
-            <button id="invest-submit" class="btn-primary" type="button">Executar</button>
-          </div>
+          <div class="form-row"><label>Conta</label><select id="invest-account"></select></div>
+          <div class="form-row"><label>Valor (R$)</label><input id="invest-amount" type="number" step="0.01" /></div>
+          <div class="form-row"><label>Ação</label><select id="invest-action"><option value="guardar">Guardar</option></select></div>
+          <div class="form-row"><label>Descrição</label><input id="invest-desc" type="text" /></div>
+          <div class="form-row"><button id="invest-submit" class="btn-primary" type="button">Executar</button></div>
         </form>
       </div>
 
       <h3>Resumo de Guardado</h3>
       <div class="invest-grid">
         <div class="invest-list" id="invest-list"></div>
-        <div class="invest-summary yellow-grid">
-          <div class="y-row"><span>Guardado Total</span><strong id="guardado-total">R$ 0,00</strong></div>
-        </div>
+        <div class="invest-summary yellow-grid"><div class="y-row"><span>Guardado Total</span><strong id="guardado-total">R$ 0,00</strong></div></div>
       </div>
 
-      <h3 style="margin-top:18px">Log de Guardado (Investimentos)</h3>
-      <div class="table-wrapper">
-        <table>
-          <thead><tr><th>Data</th><th>Conta</th><th>Ação</th><th>Valor</th><th>Descrição</th></tr></thead>
-          <tbody id="invest-log-body"></tbody>
-        </table>
-      </div>
+      <h3 style="margin-top:12px">Log de Guardado</h3>
+      <div class="table-wrapper"><table><thead><tr><th>Data</th><th>Conta</th><th>Ação</th><th>Valor</th><th>Descrição</th></tr></thead><tbody id="invest-log-body"></tbody></table></div>
     </section>
 
     <!-- LOG -->
     <section id="tab-log" class="tab-panel inputs">
       <h2>Log de gastos</h2>
       <div class="log-controls">
-        <label>Filtrar conta</label>
-        <select id="log-account-filter">
-          <option value="all">Todas</option>
-        </select>
-
-        <label>Mostrar apenas mês ativo</label>
-        <input id="log-show-only-month" type="checkbox" checked />
+        <label>Filtrar conta</label><select id="log-account-filter"><option value="all">Todas</option></select>
+        <label>Mostrar apenas mês ativo</label><input id="log-show-only-month" type="checkbox" checked />
         <label class="muted small">(se desmarcar, mostra todo o histórico)</label>
       </div>
-
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr><th>Data</th><th>Descrição</th><th>Conta</th><th>Tipo</th><th>Categoria</th><th>Valor</th><th>Forma</th><th></th></tr>
-          </thead>
-          <tbody id="log-body"></tbody>
-        </table>
-      </div>
+      <div class="table-wrapper"><table><thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th>Tipo</th><th>Categoria</th><th>Valor</th><th>Forma</th><th></th></tr></thead><tbody id="log-body"></tbody></table></div>
     </section>
   </main>
 
-  <footer class="foot">
-    <small>Salvo no navegador (localStorage). Rode localmente com Flask (ver README / app.py) para testar antes de publicar.</small>
-  </footer>
+  <footer class="foot"><small>Salvo em localStorage. Recomendo rodar com Flask para testes no iPhone.</small></footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="script.js"></script>

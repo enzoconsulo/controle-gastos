@@ -1,92 +1,56 @@
 :root{
     --bg:#0b0b0b; --panel:#070707; --accent:#22c55e; --muted:#9ca3af;
-    --yellow:#f8e71c; --danger:#ef4444; --text:#e6edf3; --card-radius:12px;
+    --yellow:#f8e71c; --danger:#ef4444; --text:#e6edf3;
   }
   *{box-sizing:border-box}
-  body{
-    margin:0; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-    background: linear-gradient(180deg,#0f172a 0%, #071020 100%); color:var(--text);
-  }
-  .title{padding:16px;text-align:center}
-  .title h1{margin:0;font-size:1.2rem}
-  .muted{color:var(--muted)}
-  
-  /* month incrementer */
+  body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial;background:linear-gradient(180deg,#0f172a 0%, #071020 100%);color:var(--text)}
+  .title{padding:16px;text-align:center}.muted{color:var(--muted)}
   .month-incrementer{display:flex;gap:12px;align-items:center;justify-content:center;padding:8px}
   .small-btn{padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);cursor:pointer}
-  .month-display{display:flex;flex-direction:column;align-items:center}
-  .month-index{font-weight:700;font-size:1.2rem}
-  .month-label{font-size:0.9rem;color:var(--muted)}
-  
-  /* tabs */
-  .tabs{display:flex;gap:8px;justify-content:center;padding:8px}
-  .tab-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px 12px;border-radius:10px;color:var(--text);cursor:pointer}
-  .tab-btn.active{background:rgba(255,255,255,0.03);box-shadow:0 6px 16px rgba(0,0,0,0.6)}
-  
+  .month-display{display:flex;flex-direction:column;align-items:center}.month-index{font-weight:700;font-size:1.2rem}.month-label{font-size:0.9rem;color:var(--muted)}
+  .tabs{display:flex;gap:8px;justify-content:center;padding:8px}.tab-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px 12px;border-radius:10px;color:var(--text);cursor:pointer}.tab-btn.active{background:rgba(255,255,255,0.03)}
   .wrap{max-width:1100px;margin:12px auto;padding:12px;display:flex;flex-direction:column;gap:18px}
-  
-  /* panel */
   .panel{background:linear-gradient(180deg,#060606,#0a0a0a);border-radius:12px;padding:14px;box-shadow:0 12px 40px rgba(2,6,23,0.7)}
   .accounts-table{width:100%;border-collapse:collapse;margin-bottom:6px}
   .accounts-table thead th{ text-align:left;padding:8px;color:var(--muted);border-bottom:1px solid rgba(255,255,255,0.04)}
   .accounts-table td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.02)}
-  
   .panel-middle{display:flex;gap:16px;align-items:flex-start}
   .left-box{flex:1;min-width:320px;background:linear-gradient(180deg,#0c0c0c,#121212);padding:12px;border-radius:10px}
   .right-box{width:320px;display:flex;flex-direction:column;gap:12px}
   .yellow-grid{background:var(--yellow);color:#111;padding:10px;border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,0.4)}
   .y-row{display:flex;justify-content:space-between;padding:6px 0;font-weight:700}
   .small-box{margin-top:6px;background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;text-align:center}
-  .small-box #credit-debit-small{margin-top:8px;font-weight:700;font-size:1.05rem}
-  
-  /* Input area */
   .inputs{background:linear-gradient(180deg,#071018,#05111a);padding:14px;border-radius:12px}
   .monthly-config{background:linear-gradient(180deg,#081018,#071018);padding:10px;border-radius:10px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.04)}
   .month-totals{display:flex;gap:12px}
   .tot-block{display:flex;flex-direction:column;gap:6px}
   .tot-block label{font-size:0.85rem;color:var(--muted)}
   .tot-block input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)}
-  
   .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
   .form-field{display:flex;flex-direction:column;gap:6px}
   .form-field input, .form-field select{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)}
   .form-actions{display:flex;align-items:end;justify-content:flex-end}
-  
   .editable-accounts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px}
   .account-card{background:linear-gradient(180deg,#0b1116,#071018);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04)}
   .account-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
   .account-row label{flex:1;color:var(--muted);font-size:0.9rem}
   .account-row input{width:130px;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)}
-  
   .actions{display:flex;gap:8px;margin-top:12px}
   .btn{padding:8px 14px;border-radius:999px;border:none;background:var(--accent);color:#072109;font-weight:700;cursor:pointer}
   .btn.danger{background:var(--danger);color:#fff}
   .btn-primary{background:linear-gradient(135deg,#22c55e,#16a34a);color:#022c22;padding:8px 14px;border-radius:8px;border:none;cursor:pointer}
-  
-  /* Investimentos */
   .invest-actions{background:linear-gradient(180deg,#071018,#0b1116);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);margin-bottom:12px}
   .invest-form{display:flex;gap:12px;flex-wrap:wrap}
   .form-row{display:flex;flex-direction:column;gap:6px}
   .invest-grid{display:flex;gap:16px;align-items:flex-start}
   .invest-list{flex:1;display:grid;gap:10px}
   .invest-item{background:linear-gradient(180deg,#071018,#0b1116);padding:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(255,255,255,0.04)}
-  
-  /* Log */
   .log-controls{display:flex;gap:12px;align-items:center;margin-bottom:8px}
   .log-controls label{color:var(--muted)}
   .table-wrapper{max-height:420px;overflow:auto;border-radius:8px;border:1px solid rgba(255,255,255,0.04)}
   table{width:100%;border-collapse:collapse}
   thead th{position:sticky;top:0;background:rgba(2,6,23,0.9);padding:8px;color:var(--muted)}
   td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.02)}
-  
-  @media (max-width:880px){
-    .panel-middle{flex-direction:column}
-    .right-box{width:100%}
-    .form-grid{grid-template-columns:1fr}
-    .invest-grid{flex-direction:column}
-  }
-  
-  /* hidden panels */
-  .tab-panel{display:none}
-  .tab-panel.active{display:block}
+  @media (max-width:880px){.panel-middle{flex-direction:column}.right-box{width:100%}.form-grid{grid-template-columns:1fr}.invest-grid{flex-direction:column}}
+  .tab-panel{display:none}.tab-panel.active{display:block}
   
