@@ -1,11 +1,3 @@
-// controleExcel_v10
-// - Gastos no crédito ainda separados por banco
-// - Crédito total disponível agora é GLOBAL (state.totals.credito_total - total gasto no crédito no mês)
-// - Quadro amarelo mostra "Crédito (soma disponível)" (global)
-// - Tabela não mostra mais coluna "Crédito Disp." por banco
-// - Gráfico "Crédito disponível — por conta" removido
-// - Campos de credit_total por conta permanecem apenas como referência/registro
-
 const STORAGE_KEY = "controleExcel_v10";
 
 const DEFAULT = {
@@ -24,9 +16,8 @@ const DEFAULT = {
 
 let state = loadState();
 
-// -------- load / save / migration --------
 function loadState(){
-  try {
+  try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
       const s = JSON.parse(raw);
@@ -41,14 +32,13 @@ function loadState(){
       if(!s.meta.baseMonth) s.meta.baseMonth = new Date().toISOString().slice(0,7);
       return s;
     }
-  } catch(e){ console.error('load error', e); }
+  }catch(e){console.error(e);}
   const copy = JSON.parse(JSON.stringify(DEFAULT));
   copy.meta.baseMonth = new Date().toISOString().slice(0,7);
   return copy;
 }
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
-// -------- helpers --------
 function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 const sum = (arr, fn)=> arr.reduce((s,x)=> s + (Number(fn?fn(x):x)||0), 0);
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -60,7 +50,6 @@ function computeMonthFromOffset(offset){
 function monthOf(d){ return (d||'').slice(0,7); }
 function getActiveMonth(){ return computeMonthFromOffset(state.meta.activeOffset); }
 
-// -------- grouping / derived --------
 function monthlySumsByAccount(month){
   const map = {};
   state.accounts.forEach(a => map[a.id] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 });
@@ -89,7 +78,7 @@ function calcDerived(month){
   return { sumsByAccount: sums, total_gasto_credito, available_credit_total, available_vr, guardado_total, saldo_display, credito_debito };
 }
 
-// -------- rendering & charts --------
+/* ---------- render ---------- */
 let gastoChart=null, categoryChart=null, monthlyChart=null, entradaChart=null;
 
 function renderAccountsTable(){
@@ -117,6 +106,19 @@ function renderYellow(){
   document.getElementById('credit-debit-small').textContent = money(d.credito_debito);
 }
 
+function baseChartOptions(){
+  return {
+    responsive:true,
+    maintainAspectRatio:false,
+    aspectRatio:2,
+    plugins:{ legend:{ labels:{ font:{ size:10 } } } },
+    scales:{
+      x:{ ticks:{ font:{ size:9 } }, grid:{ display:false } },
+      y:{ ticks:{ font:{ size:9 } }, grid:{ color:'rgba(148,163,184,0.15)' } }
+    }
+  };
+}
+
 function renderGastoCreditoChart(){
   const ctx = document.getElementById('gasto-credito-chart').getContext('2d');
   const month = getActiveMonth();
@@ -124,7 +126,11 @@ function renderGastoCreditoChart(){
   const labels = state.accounts.map(a=>a.name);
   const data = state.accounts.map(a => (sums[a.id] ? sums[a.id].gasto_credito : 0));
   if(gastoChart) gastoChart.destroy();
-  gastoChart = new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Gasto Crédito',data}]},options:{plugins:{legend:{display:false}}}});
+  gastoChart = new Chart(ctx,{
+    type:'bar',
+    data:{ labels,datasets:[{label:'Gasto crédito',data}]},
+    options:baseChartOptions()
+  });
 }
 
 function renderCategoryPie(){
@@ -138,14 +144,25 @@ function renderCategoryPie(){
   const labels = Object.keys(map);
   const data = labels.map(k=>map[k]);
   if(categoryChart) categoryChart.destroy();
-  categoryChart = new Chart(ctx,{type:'pie',data:{labels,datasets:[{data}]},options:{plugins:{legend:{position:'bottom'}}}});
+  categoryChart = new Chart(ctx,{
+    type:'pie',
+    data:{ labels,datasets:[{data}]},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      aspectRatio:1.4,
+      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } }
+    }
+  });
 }
 
 function monthlyTotalsLastN(n=6){
   const arr=[];
   for(let i=state.meta.activeOffset-(n-1); i<=state.meta.activeOffset; i++){
     const month = computeMonthFromOffset(i);
-    const total = state.expenses.filter(e => monthOf(e.date) === month && e.type !== 'entrada').reduce((s,x)=>s+Number(x.amount||0),0);
+    const total = state.expenses
+      .filter(e => monthOf(e.date) === month && e.type !== 'entrada')
+      .reduce((s,x)=>s+Number(x.amount||0),0);
     arr.push({month,total});
   }
   return arr;
@@ -155,10 +172,23 @@ function renderMonthlyLine(){
   const arr = monthlyTotalsLastN(6);
   const labels = arr.map(x=>x.month), data = arr.map(x=>x.total);
   if(monthlyChart) monthlyChart.destroy();
-  monthlyChart = new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Gasto total (6 meses)',data,fill:false}]},options:{plugins:{legend:{display:false}}}});
+  monthlyChart = new Chart(ctx,{
+    type:'line',
+    data:{ labels,datasets:[{label:'Gasto total',data,fill:false,tension:0.25}]},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      aspectRatio:1.8,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ font:{ size:9 } }, grid:{ display:false } },
+        y:{ ticks:{ font:{ size:9 } }, grid:{ color:'rgba(148,163,184,0.15)' } }
+      }
+    }
+  });
 }
 
-// Entradas pie (Input + opcional Entrada inicial)
+/* entradas */
 function getEntradasDistribution(month, includeStart){
   const map = {};
   state.expenses.filter(e => monthOf(e.date) === month && e.type === 'entrada').forEach(e=>{
@@ -179,10 +209,19 @@ function renderEntradaPie(){
   const labels = Object.keys(map).map(id => (state.accounts.find(a=>a.id===id) || {name:id}).name);
   const data = Object.keys(map).map(k => map[k]);
   if(entradaChart) entradaChart.destroy();
-  entradaChart = new Chart(ctx, { type: 'pie', data: { labels, datasets: [{ data }]}, options:{plugins:{legend:{position:'bottom'}}} });
+  entradaChart = new Chart(ctx,{
+    type:'pie',
+    data:{ labels,datasets:[{data}]},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      aspectRatio:1.4,
+      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } }
+    }
+  });
 }
 
-// -------- selects & editable accounts --------
+/* selects & editable */
 function populateAccountSelects(){
   const sel = document.getElementById('exp-account');
   const selLog = document.getElementById('log-account-filter');
@@ -200,7 +239,7 @@ function populateAccountSelects(){
     state.accounts.forEach((a, idx) => {
       const card = document.createElement('div'); card.className = 'account-card';
       card.innerHTML = `<h4>${a.name}</h4>
-        <div class="account-row"><label>Crédito (da conta)</label><input data-acc="${idx}" data-field="credit_total" type="number" step="0.01" value="${a.credit_total||0}" /></div>`;
+        <div class="account-row"><label>Crédito</label><input data-acc="${idx}" data-field="credit_total" type="number" step="0.01" value="${a.credit_total||0}" /></div>`;
       inicioCredits.appendChild(card);
     });
     inicioCredits.querySelectorAll('input').forEach(inp=>{
@@ -225,7 +264,7 @@ function renderEditableAccounts(){
     card.innerHTML = `<h4>${acc.name}</h4>
       <div class="account-row"><label>Saldo</label><input data-acc="${idx}" data-field="saldo" type="number" step="0.01" value="${acc.saldo}" /></div>
       <div class="account-row"><label>Guardado</label><input data-acc="${idx}" data-field="guardado" type="number" step="0.01" value="${acc.guardado||0}" /></div>
-      <div class="account-row"><label>Crédito (desta conta)</label><input data-acc="${idx}" data-field="credit_total" type="number" step="0.01" value="${acc.credit_total||0}" /></div>`;
+      <div class="account-row"><label>Crédito</label><input data-acc="${idx}" data-field="credit_total" type="number" step="0.01" value="${acc.credit_total||0}" /></div>`;
     c.appendChild(card);
   });
 
@@ -240,7 +279,7 @@ function renderEditableAccounts(){
   });
 }
 
-// -------- investimentos --------
+/* investimentos */
 function renderInvestimentos(){
   const list = document.getElementById('invest-list'); list.innerHTML='';
   state.accounts.forEach(a=>{
@@ -262,7 +301,7 @@ function renderInvestLog(){
   });
 }
 
-// -------- logs --------
+/* log */
 function renderLogTable(){
   const tbody = document.getElementById('log-body'); tbody.innerHTML='';
   const accountFilter = document.getElementById('log-account-filter').value;
@@ -282,7 +321,7 @@ function renderLogTable(){
   tbody.querySelectorAll('button.del').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-      if(!confirm('Excluir esse gasto?')) return;
+      if(!confirm('Excluir esse lançamento?')) return;
       const exp = state.expenses.find(x=>x.id===id);
       if(exp) applyExpenseReverse(exp);
       state.expenses = state.expenses.filter(x=>x.id!==id);
@@ -291,7 +330,7 @@ function renderLogTable(){
   });
 }
 
-// -------- apply / reverse expense --------
+/* efeitos dos lançamentos */
 function applyExpenseEffects(exp){
   if(exp.type === 'vr'){
     const caju = state.accounts.find(a=>a.name.toLowerCase().includes('caju'));
@@ -309,12 +348,13 @@ function applyExpenseReverse(exp){
   const acc = state.accounts.find(a=>a.id===exp.accountId);
   if(!acc) return;
   if(exp.type === 'saldo'){ acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0); }
-  else if(exp.type === 'entrada'){ acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
+  else if(exp.type === 'entrada'){
+    acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
     if(exp.category === 'investimento') acc.guardado = Number(acc.guardado||0) - Number(exp.amount||0);
   }
 }
 
-// -------- invest action --------
+/* invest action */
 function handleInvestAction(){
   const accountId = document.getElementById('invest-account').value;
   const amount = Number(document.getElementById('invest-amount').value || 0);
@@ -323,28 +363,30 @@ function handleInvestAction(){
   if(!amount || amount <= 0){ alert('Valor inválido'); return; }
   const acc = state.accounts.find(a=>a.id===accountId);
   if(!acc){ alert('Conta inválida'); return; }
-  if(Number(acc.saldo||0) < amount){ if(!confirm('Saldo pode ficar negativo. Continuar?')) return; }
+  if(Number(acc.saldo||0) < amount){
+    if(!confirm('Saldo pode ficar negativo. Continuar?')) return;
+  }
   acc.saldo = Number(acc.saldo||0) - amount;
   acc.guardado = Number(acc.guardado||0) + amount;
   const entry = { id: Date.now().toString(), date: todayISO(), accountId, action, amount, desc };
   state.investments.push(entry); saveState(); updateAll();
-  document.getElementById('invest-amount').value = ''; document.getElementById('invest-desc').value = '';
+  document.getElementById('invest-amount').value = '';
+  document.getElementById('invest-desc').value = '';
   alert('Guardado registrado.');
 }
 
-// -------- expense submit --------
+/* submit gasto/entrada */
 function handleExpenseSubmit(e){
   e.preventDefault();
   const date = document.getElementById('exp-date').value || todayISO();
   const desc = document.getElementById('exp-desc').value.trim() || '';
   const amount = Number(document.getElementById('exp-amount').value || 0);
   const type = document.getElementById('exp-type').value;
-  let accountId = document.getElementById('exp-account').value;
+  const accountId = document.getElementById('exp-account').value;
   const method = document.getElementById('exp-method').value.trim() || '';
   const category = document.getElementById('exp-category').value || 'outros';
   if(!amount || amount <= 0){ alert('Valor inválido'); return; }
 
-  // valida apenas contra crédito GLOBAL (não por banco)
   if(type === 'credito'){
     const month = getActiveMonth();
     const sums = monthlySumsByAccount(month);
@@ -362,7 +404,7 @@ function handleExpenseSubmit(e){
   location.reload();
 }
 
-// -------- início do mês (VR, Entrada inicial, crédito global + startEntries) --------
+/* início do mês */
 function applyStartMonthConfig(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
@@ -382,7 +424,7 @@ function applyStartMonthConfig(){
   }
 
   const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
-  if(caju){ caju.saldo = Number(vr || 0); }
+  if(caju) caju.saldo = Number(vr || 0);
 
   const month = getActiveMonth();
   const itau = state.accounts.find(a => a.name.toLowerCase().includes('itau'));
@@ -396,7 +438,7 @@ function applyStartMonthConfig(){
 
   saveState();
   updateAll();
-  alert('Dados do início do mês aplicados (VR -> Caju, Entrada inicial -> Itau, crédito global definido).');
+  alert('Dados do início do mês aplicados.');
 }
 function clearStartMonthFields(){
   document.getElementById('inicio-vr-total').value = '';
@@ -406,7 +448,7 @@ function clearStartMonthFields(){
   if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
 }
 
-// -------- init --------
+/* init */
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -420,9 +462,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   const monthIndexEl = document.getElementById('month-index');
   const monthLabelEl = document.getElementById('month-label');
-  function renderMonthIndex(){ monthIndexEl.textContent = state.meta.activeOffset; monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset); }
-  document.getElementById('prev-month').addEventListener('click', ()=>{ state.meta.activeOffset = Number(state.meta.activeOffset||0)-1; saveState(); renderMonthIndex(); updateAll(); });
-  document.getElementById('next-month').addEventListener('click', ()=>{ state.meta.activeOffset = Number(state.meta.activeOffset||0)+1; saveState(); renderMonthIndex(); updateAll(); });
+  function renderMonthIndex(){
+    monthIndexEl.textContent = state.meta.activeOffset;
+    monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset);
+  }
+  document.getElementById('prev-month').addEventListener('click', ()=>{
+    state.meta.activeOffset = Number(state.meta.activeOffset||0)-1;
+    saveState(); renderMonthIndex(); updateAll();
+  });
+  document.getElementById('next-month').addEventListener('click', ()=>{
+    state.meta.activeOffset = Number(state.meta.activeOffset||0)+1;
+    saveState(); renderMonthIndex(); updateAll();
+  });
   renderMonthIndex();
 
   populateAccountSelects();
@@ -441,17 +492,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const includeToggle = document.getElementById('include-start-entrada');
   if(includeToggle) includeToggle.addEventListener('change', ()=>{ renderEntradaPie(); });
 
-  document.getElementById('save-btn').addEventListener('click', ()=>{ saveState(); alert('Salvo localmente no navegador.'); });
+  document.getElementById('save-btn').addEventListener('click', ()=>{
+    saveState();
+    alert('Salvo localmente.');
+  });
   document.getElementById('reset-btn').addEventListener('click', ()=>{
-    if(!confirm('Tem certeza? Isso ZERARÁ Saldos, Guardado, Créditos, Entrada inicial e todos os logs.')) return;
+    if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
     state = JSON.parse(JSON.stringify(DEFAULT));
     state.meta.baseMonth = (new Date()).toISOString().slice(0,7);
     state.meta.activeOffset = 0;
-    saveState(); location.reload();
+    saveState();
+    location.reload();
   });
 });
 
-// -------- updateAll --------
 function updateAll(){
   populateAccountSelects();
   renderEditableAccounts();
