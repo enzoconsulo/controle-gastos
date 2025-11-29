@@ -41,7 +41,7 @@
               <thead>
                 <tr>
                   <th>Conta</th>
-                  <th>Saldo</th>
+                  <th>Saldo</</th>
                   <th>Gasto crédito (mês)</th>
                   <th>Gasto VR (mês)</th>
                   <th>Guardado</th>
@@ -262,6 +262,13 @@
     <!-- LOG -->
     <section id="tab-log" class="tab-panel inputs">
       <h2 class="panel-title">Log de lançamentos</h2>
+
+      <div class="backup-controls">
+        <button id="backup-export" class="btn">Exportar backup</button>
+        <label for="backup-import-input" class="btn ghost">Importar backup</label>
+        <input id="backup-import-input" type="file" accept="application/json"/>
+      </div>
+
       <div class="log-controls">
         <div class="log-filter">
           <label>Conta</label>

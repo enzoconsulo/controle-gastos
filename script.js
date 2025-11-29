@@ -448,6 +448,54 @@ function clearStartMonthFields(){
   if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
 }
 
+/* backup: exportar/importar JSON */
+function exportBackup(){
+  try{
+    const dataStr = JSON.stringify(state);
+    const blob = new Blob([dataStr], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url;
+    a.download = `controle-gastos-backup-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    console.error(e);
+    alert('Não foi possível gerar o backup.');
+  }
+}
+
+function handleBackupImport(e){
+  const file = e.target.files[0];
+  if(!file){
+    e.target.value='';
+    return;
+  }
+  if(!confirm('Importar backup e substituir TODOS os dados atuais?')){
+    e.target.value='';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev =>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      state = loadState();
+      alert('Backup importado com sucesso.');
+      location.reload();
+    }catch(err){
+      console.error(err);
+      alert('Arquivo de backup inválido ou corrompido.');
+    }finally{
+      e.target.value='';
+    }
+  };
+  reader.readAsText(file);
+}
+
 /* init */
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -504,6 +552,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     saveState();
     location.reload();
   });
+
+  const backupExportBtn = document.getElementById('backup-export');
+  const backupImportInput = document.getElementById('backup-import-input');
+  if(backupExportBtn) backupExportBtn.addEventListener('click', exportBackup);
+  if(backupImportInput) backupImportInput.addEventListener('change', handleBackupImport);
 });
 
 function updateAll(){
