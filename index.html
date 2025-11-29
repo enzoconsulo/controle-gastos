@@ -1,43 +1,42 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Controle de Gastos - Modelo fiel (Excel)</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Controle de Gastos — Excel Model</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
   <header class="title">
     <h1>Controle de Gastos (modelo Excel)</h1>
-    <p>Dashboard fiel ao arquivo/anexo — edite as linhas vermelhas/verde que ficam abaixo e o painel preto atualiza.</p>
+    <p class="muted">Dashboard fiel ao Excel — use as abas para navegar.</p>
   </header>
 
+  <nav class="tabs">
+    <button data-tab="dashboard" class="tab-btn active">Dashboard</button>
+    <button data-tab="input" class="tab-btn">Input</button>
+    <button data-tab="invest" class="tab-btn">Investimentos</button>
+    <button data-tab="log" class="tab-btn">Log</button>
+  </nav>
+
   <main class="wrap">
-    <!-- PAINEL PRETO (dashboard fiel) -->
-    <section class="panel">
-      <div class="accounts">
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="tab-panel active panel">
+      <div class="panel-top">
         <table class="accounts-table">
           <thead>
             <tr>
-              <th>Conta</th>
-              <th>Saldo</th>
-              <th>Gasto Crédito</th>
-              <th>Gasto VR</th>
-              <th>Investimento</th>
-              <th>Guardado</th>
+              <th>Conta</th><th>Saldo</th><th>Gasto Crédito</th><th>Gasto VR</th><th>Investimento</th><th>Guardado</th>
             </tr>
           </thead>
-          <tbody id="accounts-body">
-            <!-- preenchido por JS -->
-          </tbody>
+          <tbody id="accounts-body"></tbody>
         </table>
       </div>
 
-      <div class="middle">
+      <div class="panel-middle">
         <div class="left-box">
-          <canvas id="gasto-credito-chart" width="360" height="220"></canvas>
+          <canvas id="gasto-credito-chart" width="420" height="260"></canvas>
         </div>
-
         <div class="right-box">
           <h3>Disponível</h3>
           <div class="yellow-grid">
@@ -55,46 +54,122 @@
       </div>
     </section>
 
-    <!-- AREA DE INPUTS longas (vermelhas/verde) -->
-    <section class="inputs">
-      <h2>Inputs (linhas longas — altere aqui)</h2>
-      <p class="muted">Edite os campos abaixo — o painel acima é calculado automaticamente a partir desses inputs.</p>
+    <!-- INPUT -->
+    <section id="tab-input" class="tab-panel inputs">
+      <h2>Novo gasto / entrada</h2>
 
-      <div class="inputs-grid">
-        <!-- Totais gerais (de onde vêm os amarelos) -->
-        <div class="input-block">
+      <!-- Totais (definir no início do mês) -->
+      <div class="month-totals">
+        <div class="tot-block">
           <label>Crédito (total)</label>
-          <input id="input-credit-total" type="number" step="1" />
+          <input id="input-credit-total" type="number" step="0.01" />
         </div>
-
-        <div class="input-block">
+        <div class="tot-block">
           <label>VR (total)</label>
-          <input id="input-vr-total" type="number" step="1" />
+          <input id="input-vr-total" type="number" step="0.01" />
         </div>
-
-        <div class="input-block">
-          <label>Entrada (renda)</label>
-          <input id="input-entrada" type="number" step="1" />
+        <div class="tot-block">
+          <label>Entrada (renda do mês)</label>
+          <input id="input-entrada-total" type="number" step="0.01" />
         </div>
       </div>
 
-      <h3>Contas / linhas (vermelho/verde) — cada conta tem vários campos originados das suas linhas longas</h3>
-      <div id="editable-accounts" class="editable-accounts">
-        <!-- gerado por JS: cada conta com campos: saldo, gasto_credito, gasto_vr, investimento, guardado -->
-      </div>
+      <form id="expense-form" class="form-grid">
+        <div class="form-field">
+          <label>Data</label>
+          <input type="date" id="exp-date" />
+        </div>
+        <div class="form-field">
+          <label>Descrição (opcional)</label>
+          <input type="text" id="exp-desc" placeholder="Ex: Mercado, Uber..." />
+        </div>
+        <div class="form-field">
+          <label>Valor (R$)</label>
+          <input type="number" step="0.01" id="exp-amount" required/>
+        </div>
+        <div class="form-field">
+          <label>Tipo (ação)</label>
+          <select id="exp-type">
+            <option value="saldo">Debitar Saldo</option>
+            <option value="credito">Debitar Crédito</option>
+            <option value="vr">Debitar VR</option>
+            <option value="entrada">Entrada (depositar)</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Banco / Conta</label>
+          <select id="exp-account"></select>
+        </div>
+        <div class="form-field">
+          <label>Categoria</label>
+          <select id="exp-category">
+            <option value="alimentacao">Alimentação</option>
+            <option value="gasolina">Gasolina</option>
+            <option value="mercado">Mercado</option>
+            <option value="transporte">Transporte</option>
+            <option value="lazer">Lazer</option>
+            <option value="saude">Saúde</option>
+            <option value="assinaturas">Assinaturas</option>
+            <option value="outros">Outros</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Forma (opcional)</label>
+          <input type="text" id="exp-method" placeholder="Ex: Cartão, Dinheiro"/>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-primary" type="submit">Registrar</button>
+        </div>
+      </form>
+
+      <hr style="margin:16px 0; border:0; border-top:1px solid rgba(255,255,255,0.04)"/>
+
+      <h3>Linhas longas (editar manual — alimentam o dashboard)</h3>
+      <div id="editable-accounts" class="editable-accounts"></div>
 
       <div class="actions">
-        <button id="save-btn" class="btn">Salvar (local)</button>
-        <button id="reset-btn" class="btn danger">Resetar para valores do Excel</button>
+        <button id="save-btn" class="btn">Salvar</button>
+        <button id="reset-btn" class="btn danger">Resetar valores Excel</button>
+      </div>
+    </section>
+
+    <!-- INVESTIMENTOS -->
+    <section id="tab-invest" class="tab-panel panel">
+      <h2>Investimentos</h2>
+      <div class="invest-grid">
+        <div class="invest-list" id="invest-list"></div>
+        <div class="invest-summary yellow-grid">
+          <div class="y-row"><span>Guardado Total</span><strong id="guardado-total">R$ 0,00</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section id="tab-log" class="tab-panel inputs">
+      <h2>Log de gastos</h2>
+      <div class="log-controls">
+        <label>Filtrar conta</label>
+        <select id="log-account-filter">
+          <option value="all">Todas</option>
+        </select>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Data</th><th>Descrição</th><th>Conta</th><th>Tipo</th><th>Categoria</th><th>Valor</th><th>Forma</th><th></th></tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    <small>Feito para reproduzir fielmente a lógica do seu Excel. Salvo no navegador (localStorage).</small>
+    <small>Salvo no navegador (localStorage). Rode localmente com Flask (ver README / app.py) para testar antes de publicar.</small>
   </footer>
 
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="script.js"></script>
 </body>
