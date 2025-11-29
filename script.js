@@ -1,378 +1,212 @@
-// ============ CONFIG INICIAL ===========
+/* script.js
+   Versão fiel ao Excel enviado:
+   - Os inputs (linhas longas) atualizam as contas (saldo, gasto_credito, gasto_vr, investimento, guardado)
+   - Calcula: Crédito disponível, VR disponível, Saldo (EXCLUINDO a conta VR/Caju), Guardado total
+   - Mostra Créditos + Débito = CréditoDisponível + Saldo
+   - Salva em localStorage
+*/
 
-// categorias padrão inspiradas na sua planilha
-const defaultCategories = [
-    { id: "alimentacao", name: "Alimentação", budget: 900 },
-    { id: "transporte", name: "Transporte", budget: 200 },
-    { id: "pets", name: "Pets", budget: 200 },
-    { id: "lazer", name: "Lazer", budget: 200 },
-    { id: "cuidar_voce", name: "Cuidar de você", budget: 200 },
-    { id: "outros_vt", name: "Outros (VT/máquina)", budget: 200 },
-    { id: "outros_caju", name: "Outros (Caju/VR)", budget: 200 },
-    { id: "outros_credito", name: "Outros (Crédito)", budget: 200 },
-    { id: "cursos", name: "Cursos", budget: 211 },
-  ];
+// --- VALORES INICIAIS (extraídos do seu arquivo enviado) ---
+const DEFAULT = {
+    accounts: [
+      { id: "nubank", name: "Nubank", saldo: 60, gasto_credito: 540, gasto_vr: 0, investimento: 4093, guardado: 6823 },
+      { id: "sicoob", name: "Sicoob", saldo: 0, gasto_credito: 140, gasto_vr: 0, investimento: 0, guardado: 0 },
+      { id: "itau", name: "Itau", saldo: 552, gasto_credito: 0, gasto_vr: 0, investimento: 450, guardado: 453 },
+      { id: "caju", name: "Caju", saldo: 750, gasto_credito: 0, gasto_vr: 90, investimento: 0, guardado: 0 } // Caju = VR account
+    ],
+    totals: {
+      credito_total: 1800,
+      vr_total: 840,
+      entrada: 2311
+    }
+  };
   
-  const STORAGE_EXPENSES_KEY = "gastosAppExpenses";
-  const STORAGE_CATEGORIES_KEY = "gastosAppCategories";
+  // storage keys
+  const STORAGE_KEY = "controleGastos_v1";
   
-  let expenses = [];
-  let categories = [];
-  let pieChart = null;
-  let barChart = null;
+  // app state
+  let state = loadState();
   
-  // ============ FUNÇÕES DE FORMATAÇÃO ===========
-  
-  function formatCurrency(value) {
-    return value.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
+  // --- helpers
+  function money(v){
+    v = Number(v || 0);
+    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
   
-  // ============ LOCALSTORAGE ===========
+  function sum(arr, fn){ return arr.reduce((s,x)=>s + (Number(fn?fn(x):x)||0),0); }
   
-  function loadData() {
-    const savedExpenses = localStorage.getItem(STORAGE_EXPENSES_KEY);
-    expenses = savedExpenses ? JSON.parse(savedExpenses) : [];
-  
-    const savedCategories = localStorage.getItem(STORAGE_CATEGORIES_KEY);
-    categories = savedCategories
-      ? JSON.parse(savedCategories)
-      : JSON.parse(JSON.stringify(defaultCategories)); // cópia
+  // --- load/save
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    // fallback to default copy
+    return JSON.parse(JSON.stringify(DEFAULT));
+  }
+  function saveState(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
   
-  function saveExpenses() {
-    localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(expenses));
-  }
-  
-  function saveCategories() {
-    localStorage.setItem(STORAGE_CATEGORIES_KEY, JSON.stringify(categories));
-  }
-  
-  // ============ CÁLCULOS ===========
-  
-  function getTotalBudget() {
-    return categories.reduce((sum, c) => sum + (Number(c.budget) || 0), 0);
-  }
-  
-  function getTotalSpent() {
-    return expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  }
-  
-  function getTotalSpentByCategory(categoryId) {
-    return expenses
-      .filter((e) => e.categoryId === categoryId)
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  }
-  
-  // ============ RENDERIZAÇÃO ===========
-  
-  function renderSummary() {
-    const totalBudgetEl = document.getElementById("total-budget");
-    const totalSpentEl = document.getElementById("total-spent");
-    const remainingTotalEl = document.getElementById("remaining-total");
-  
-    const totalBudget = getTotalBudget();
-    const totalSpent = getTotalSpent();
-    const remaining = totalBudget - totalSpent;
-  
-    totalBudgetEl.textContent = formatCurrency(totalBudget);
-    totalSpentEl.textContent = formatCurrency(totalSpent);
-    remainingTotalEl.textContent = formatCurrency(remaining);
-  
-    remainingTotalEl.className =
-      "badge-" + (remaining >= 0 ? "positive" : "negative");
-  }
-  
-  function renderCategorySelect() {
-    const select = document.getElementById("expense-category");
-    select.innerHTML = "";
-    categories.forEach((c) => {
-      const opt = document.createElement("option");
-      opt.value = c.id;
-      opt.textContent = c.name;
-      select.appendChild(opt);
-    });
-  }
-  
-  function renderCategoryBudgetTable() {
-    const tbody = document.getElementById("category-budget-body");
+  // --- render accounts table (painel preto)
+  function renderAccountsTable(){
+    const tbody = document.getElementById("accounts-body");
     tbody.innerHTML = "";
-  
-    categories.forEach((c, index) => {
-      const spent = getTotalSpentByCategory(c.id);
-      const remaining = (Number(c.budget) || 0) - spent;
-  
+    state.accounts.forEach(acc=>{
       const tr = document.createElement("tr");
-  
-      const nameTd = document.createElement("td");
-      nameTd.textContent = c.name;
-  
-      const budgetTd = document.createElement("td");
-      const input = document.createElement("input");
-      input.type = "number";
-      input.step = "0.01";
-      input.min = "0";
-      input.value = c.budget;
-      input.dataset.index = index;
-      input.className = "budget-input";
-      budgetTd.appendChild(input);
-  
-      const spentTd = document.createElement("td");
-      spentTd.textContent = formatCurrency(spent);
-  
-      const remainingTd = document.createElement("td");
-      remainingTd.textContent = formatCurrency(remaining);
-      remainingTd.className =
-        "badge-" + (remaining >= 0 ? "positive" : "negative");
-  
-      tr.appendChild(nameTd);
-      tr.appendChild(budgetTd);
-      tr.appendChild(spentTd);
-      tr.appendChild(remainingTd);
-  
+      tr.innerHTML = `
+        <td>${acc.name}</td>
+        <td>${money(acc.saldo)}</td>
+        <td>${money(acc.gasto_credito)}</td>
+        <td>${money(acc.gasto_vr)}</td>
+        <td>${money(acc.investimento)}</td>
+        <td style="color:${acc.guardado? '#fff' : '#999'}">${money(acc.guardado)}</td>
+      `;
       tbody.appendChild(tr);
     });
   }
   
-  function renderExpensesTable() {
-    const tbody = document.getElementById("expenses-body");
-    tbody.innerHTML = "";
+  // --- calculations (replicando as fórmulas do seu Excel)
+  function calculateDerived(){
+    const total_gasto_credito = sum(state.accounts, a=>a.gasto_credito);
+    const available_credit = Number(state.totals.credito_total) - total_gasto_credito;
   
-    // mais recentes primeiro
-    const sorted = [...expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+    const total_gasto_vr = sum(state.accounts, a=>a.gasto_vr);
+    const available_vr = Number(state.totals.vr_total) - total_gasto_vr;
   
-    sorted.forEach((e) => {
-      const tr = document.createElement("tr");
+    const guardado_total = sum(state.accounts, a=>a.guardado);
   
-      const dateTd = document.createElement("td");
-      dateTd.textContent = e.date || "";
+    // saldo total = soma de todos os saldos
+    const total_saldos = sum(state.accounts, a=>a.saldo);
   
-      const descTd = document.createElement("td");
-      descTd.textContent = e.description;
+    // SALDO visível no painel: exclui a conta de VR (no seu excel a conta VR é "Caju")
+    const vrAccount = state.accounts.find(a => a.name.toLowerCase().includes("caju") || a.name.toLowerCase().includes("vr"));
+    const saldo_display = total_saldos - (vrAccount ? Number(vrAccount.saldo) : 0);
   
-      const catTd = document.createElement("td");
-      const cat = categories.find((c) => c.id === e.categoryId);
-      catTd.textContent = cat ? cat.name : "-";
+    const credito_debito = available_credit + saldo_display;
   
-      const payTd = document.createElement("td");
-      payTd.textContent = e.paymentMethod;
+    return {
+      total_gasto_credito, available_credit,
+      total_gasto_vr, available_vr,
+      guardado_total, total_saldos, saldo_display,
+      credito_debito
+    };
+  }
   
-      const amountTd = document.createElement("td");
-      amountTd.textContent = formatCurrency(Number(e.amount));
+  // --- render yellow boxes
+  function renderYellow(){
+    const calc = calculateDerived();
+    document.getElementById("avail-credit").textContent = money(calc.available_credit);
+    document.getElementById("avail-vr").textContent = money(calc.available_vr);
+    document.getElementById("avail-saldo").textContent = money(calc.saldo_display);
+    document.getElementById("avail-guardado").textContent = money(calc.guardado_total);
+    document.getElementById("credit-debit-small").textContent = money(calc.credito_debito);
+  }
   
-      const actionTd = document.createElement("td");
-      const btn = document.createElement("button");
-      btn.textContent = "Excluir";
-      btn.className = "btn-danger";
-      btn.style.fontSize = "0.75rem";
-      btn.style.padding = "4px 10px";
-      btn.onclick = () => {
-        deleteExpense(e.id);
-      };
-      actionTd.appendChild(btn);
+  // --- render editable accounts inputs (as linhas longas)
+  function renderEditableAccounts(){
+    const container = document.getElementById("editable-accounts");
+    container.innerHTML = "";
+    state.accounts.forEach((acc, idx)=>{
+      const card = document.createElement("div");
+      card.className = "account-card";
+      card.innerHTML = `
+        <h4>${acc.name}</h4>
+        <div class="account-row"><label>Saldo</label><input data-acc="${idx}" data-field="saldo" type="number" step="0.01" value="${acc.saldo}" /></div>
+        <div class="account-row"><label>Gasto Crédito</label><input data-acc="${idx}" data-field="gasto_credito" type="number" step="0.01" value="${acc.gasto_credito}" /></div>
+        <div class="account-row"><label>Gasto VR</label><input data-acc="${idx}" data-field="gasto_vr" type="number" step="0.01" value="${acc.gasto_vr}" /></div>
+        <div class="account-row"><label>Investimento</label><input data-acc="${idx}" data-field="investimento" type="number" step="0.01" value="${acc.investimento}" /></div>
+        <div class="account-row"><label>Guardado</label><input data-acc="${idx}" data-field="guardado" type="number" step="0.01" value="${acc.guardado}" /></div>
+      `;
+      container.appendChild(card);
+    });
   
-      tr.appendChild(dateTd);
-      tr.appendChild(descTd);
-      tr.appendChild(catTd);
-      tr.appendChild(payTd);
-      tr.appendChild(amountTd);
-      tr.appendChild(actionTd);
+    // hook inputs
+    container.querySelectorAll("input").forEach(inp=>{
+      inp.addEventListener("input", (e)=>{
+        const idx = Number(e.target.dataset.acc);
+        const field = e.target.dataset.field;
+        const val = Number(e.target.value || 0);
+        state.accounts[idx][field] = val;
+        updateAll();
+      });
+    });
   
-      tbody.appendChild(tr);
+    // totals
+    document.getElementById("input-credit-total").value = state.totals.credito_total;
+    document.getElementById("input-vr-total").value = state.totals.vr_total;
+    document.getElementById("input-entrada").value = state.totals.entrada;
+  
+    ["input-credit-total","input-vr-total","input-entrada"].forEach(id=>{
+      document.getElementById(id).addEventListener("input", (e)=>{
+        const v = Number(e.target.value || 0);
+        if(id === "input-credit-total") state.totals.credito_total = v;
+        if(id === "input-vr-total") state.totals.vr_total = v;
+        if(id === "input-entrada") state.totals.entrada = v;
+        updateAll();
+      });
     });
   }
   
-  // ============ GRÁFICOS ===========
+  // --- chart (gasto credito)
+  let gastoChart = null;
+  function renderChart(){
+    const ctx = document.getElementById("gasto-credito-chart").getContext("2d");
+    const labels = state.accounts.map(a=>a.name);
+    const data = state.accounts.map(a=>Number(a.gasto_credito)||0);
   
-  function updateCharts() {
-    const labels = categories.map((c) => c.name);
-    const spentData = categories.map((c) => getTotalSpentByCategory(c.id));
-    const remainingData = categories.map((c) => {
-      const remaining = (Number(c.budget) || 0) - getTotalSpentByCategory(c.id);
-      return remaining > 0 ? remaining : 0;
-    });
-  
-    const pieCtx = document
-      .getElementById("expenses-by-category-chart")
-      .getContext("2d");
-    const barCtx = document
-      .getElementById("remaining-by-category-chart")
-      .getContext("2d");
-  
-    if (pieChart) pieChart.destroy();
-    if (barChart) barChart.destroy();
-  
-    pieChart = new Chart(pieCtx, {
-      type: "pie",
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            data: spentData,
-          },
-        ],
-      },
-      options: {
-        plugins: {
-          legend: {
-            position: "bottom",
-            labels: {
-              color: "#e5e7eb",
-            },
-          },
-          tooltip: {
-            callbacks: {
-              label: function (ctx) {
-                const label = ctx.label || "";
-                const value = ctx.raw || 0;
-                return `${label}: ${formatCurrency(value)}`;
-              },
-            },
-          },
-        },
-      },
-    });
-  
-    barChart = new Chart(barCtx, {
+    if(gastoChart) gastoChart.destroy();
+    gastoChart = new Chart(ctx, {
       type: "bar",
       data: {
-        labels: labels,
-        datasets: [
-          {
-            label: "Faltando",
-            data: remainingData,
-          },
-        ],
+        labels,
+        datasets: [{ label: "Gasto Crédito", data }]
       },
       options: {
-        scales: {
-          x: {
-            ticks: { color: "#9ca3af" },
-            grid: { display: false },
-          },
-          y: {
-            ticks: {
-              color: "#9ca3af",
-              callback: function (val) {
-                return "R$ " + val;
-              },
-            },
-            grid: { color: "#111827" },
-          },
-        },
-        plugins: {
-          legend: {
-            labels: { color: "#e5e7eb" },
-          },
-          tooltip: {
-            callbacks: {
-              label: function (ctx) {
-                const value = ctx.raw || 0;
-                return "Faltando: " + formatCurrency(value);
-              },
-            },
-          },
-        },
-      },
+        plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=> `${ctx.label}: ${money(ctx.raw)}`}} },
+        scales:{ x:{ ticks:{color:'#cbd5e1'} }, y:{ ticks:{ color:'#cbd5e1', callback:val=> 'R$ ' + val }, grid:{color:'rgba(255,255,255,0.03)'} } }
+      }
     });
   }
   
-  // ============ AÇÕES ===========
+  // --- main render
+  function updateAll(){
+    renderAccountsTable();
+    renderYellow();
+    renderChart();
+    saveState();
+  }
   
-  function handleAddExpense(event) {
-    event.preventDefault();
+  // --- reset to default
+  function resetToDefault(){
+    state = JSON.parse(JSON.stringify(DEFAULT));
+    saveState();
+    renderEditableAccounts();
+    updateAll();
+  }
   
-    const dateInput = document.getElementById("expense-date");
-    const descInput = document.getElementById("expense-description");
-    const categorySelect = document.getElementById("expense-category");
-    const paymentSelect = document.getElementById("expense-payment");
-    const amountInput = document.getElementById("expense-amount");
-  
-    const date = dateInput.value;
-    const description = descInput.value.trim();
-    const categoryId = categorySelect.value;
-    const paymentMethod = paymentSelect.value;
-    const amount = parseFloat(amountInput.value);
-  
-    if (!description || isNaN(amount) || amount <= 0) {
-      alert("Preencha descrição e um valor válido.");
-      return;
+  // --- init
+  function init(){
+    // if no saved state -> initialize from default
+    if(!localStorage.getItem(STORAGE_KEY)){
+      state = JSON.parse(JSON.stringify(DEFAULT));
+      saveState();
     }
+    // build UI
+    renderEditableAccounts();
+    renderAccountsTable();
+    renderYellow();
+    renderChart();
   
-    const newExpense = {
-      id: Date.now().toString(),
-      date: date,
-      description: description,
-      categoryId: categoryId,
-      paymentMethod: paymentMethod,
-      amount: amount,
-    };
-  
-    expenses.push(newExpense);
-    saveExpenses();
-  
-    descInput.value = "";
-    amountInput.value = "";
-  
-    renderAll();
-  }
-  
-  function deleteExpense(id) {
-    if (!confirm("Excluir esse gasto?")) return;
-    expenses = expenses.filter((e) => e.id !== id);
-    saveExpenses();
-    renderAll();
-  }
-  
-  function handleSaveBudgets() {
-    const inputs = document.querySelectorAll(".budget-input");
-    inputs.forEach((input) => {
-      const idx = Number(input.dataset.index);
-      const value = parseFloat(input.value);
-      categories[idx].budget = isNaN(value) ? 0 : value;
+    // buttons
+    document.getElementById("save-btn").addEventListener("click", ()=>{
+      saveState();
+      alert("Salvo localmente no navegador.");
     });
-    saveCategories();
-    renderAll();
+    document.getElementById("reset-btn").addEventListener("click", ()=>{
+      if(confirm("Resetar para os valores originais do Excel enviado?")) resetToDefault();
+    });
   }
   
-  function clearAllExpenses() {
-    if (!confirm("Tem certeza que deseja apagar TODOS os gastos?")) return;
-    expenses = [];
-    saveExpenses();
-    renderAll();
-  }
-  
-  function renderAll() {
-    renderSummary();
-    renderCategorySelect();
-    renderCategoryBudgetTable();
-    renderExpensesTable();
-    updateCharts();
-  }
-  
-  // ============ INICIALIZAÇÃO ===========
-  
-  document.addEventListener("DOMContentLoaded", () => {
-    loadData();
-  
-    // data padrão = hoje
-    const today = new Date().toISOString().slice(0, 10);
-    document.getElementById("expense-date").value = today;
-  
-    document
-      .getElementById("expense-form")
-      .addEventListener("submit", handleAddExpense);
-  
-    document
-      .getElementById("save-budgets-btn")
-      .addEventListener("click", handleSaveBudgets);
-  
-    document
-      .getElementById("clear-expenses-btn")
-      .addEventListener("click", clearAllExpenses);
-  
-    renderAll();
-  });
+  document.addEventListener("DOMContentLoaded", init);
   
