@@ -11,6 +11,7 @@ const DEFAULT = {
   expenses: [],
   investments: [],
   startEntries: [],
+  investBoxes: [],      // caixinhas
   meta: { baseMonth: null, activeOffset: 0 }
 };
 
@@ -28,6 +29,7 @@ function loadState(){
         return a;
       });
       if(!s.startEntries) s.startEntries = [];
+      if(!s.investBoxes) s.investBoxes = [];
       if(!s.meta) s.meta = DEFAULT.meta;
       if(!s.meta.baseMonth) s.meta.baseMonth = new Date().toISOString().slice(0,7);
       return s;
@@ -225,12 +227,27 @@ function renderEntradaPie(){
 function populateAccountSelects(){
   const sel = document.getElementById('exp-account');
   const selLog = document.getElementById('log-account-filter');
-  const selInvest = document.getElementById('invest-account');
-  sel.innerHTML=''; selLog.innerHTML='<option value="all">Todas</option>'; selInvest.innerHTML='';
+  const selInvest = document.getElementById('invest-account'); // pode não existir mais, mas não faz mal
+  const boxSel = document.getElementById('box-account');
+
+  if(sel) sel.innerHTML='';
+  if(selLog) selLog.innerHTML='<option value="all">Todas</option>';
+  if(selInvest) selInvest.innerHTML='';
+  if(boxSel) boxSel.innerHTML='';
+
   state.accounts.forEach(a=>{
-    const o=document.createElement('option'); o.value=a.id; o.textContent=a.name; sel.appendChild(o);
-    const o2=document.createElement('option'); o2.value=a.id; o2.textContent=a.name; selLog.appendChild(o2);
-    const o3=document.createElement('option'); o3.value=a.id; o3.textContent=a.name; selInvest.appendChild(o3);
+    if(sel){
+      const o=document.createElement('option'); o.value=a.id; o.textContent=a.name; sel.appendChild(o);
+    }
+    if(selLog){
+      const o2=document.createElement('option'); o2.value=a.id; o2.textContent=a.name; selLog.appendChild(o2);
+    }
+    if(selInvest){
+      const o3=document.createElement('option'); o3.value=a.id; o3.textContent=a.name; selInvest.appendChild(o3);
+    }
+    if(boxSel){
+      const o4=document.createElement('option'); o4.value=a.id; o4.textContent=a.name; boxSel.appendChild(o4);
+    }
   });
 
   const inicioCredits = document.getElementById('inicio-credits');
@@ -252,13 +269,18 @@ function populateAccountSelects(){
     });
   }
 
-  document.getElementById('inicio-vr-total').value = state.totals.vr_total || 0;
-  document.getElementById('inicio-entrada-total').value = state.totals.entrada || 0;
-  document.getElementById('inicio-credit-global').value = state.totals.credito_total || 0;
+  const vrInput = document.getElementById('inicio-vr-total');
+  const entInput = document.getElementById('inicio-entrada-total');
+  const credInput = document.getElementById('inicio-credit-global');
+  if(vrInput) vrInput.value = state.totals.vr_total || 0;
+  if(entInput) entInput.value = state.totals.entrada || 0;
+  if(credInput) credInput.value = state.totals.credito_total || 0;
 }
 
 function renderEditableAccounts(){
-  const c = document.getElementById('editable-accounts'); c.innerHTML='';
+  const c = document.getElementById('editable-accounts'); 
+  if(!c) return;
+  c.innerHTML='';
   state.accounts.forEach((acc, idx)=>{
     const card = document.createElement('div'); card.className='account-card';
     card.innerHTML = `<h4>${acc.name}</h4>
@@ -279,19 +301,29 @@ function renderEditableAccounts(){
   });
 }
 
-/* investimentos */
+/* investimentos: resumo + log + caixinhas */
 function renderInvestimentos(){
-  const list = document.getElementById('invest-list'); list.innerHTML='';
-  state.accounts.forEach(a=>{
-    const item=document.createElement('div'); item.className='invest-item';
-    item.innerHTML=`<div>${a.name}</div><div>${money(a.guardado||0)}</div>`;
-    list.appendChild(item);
-  });
-  document.getElementById('guardado-total').textContent = money(sum(state.accounts, x=>x.guardado||0));
+  const list = document.getElementById('invest-list'); 
+  if(list){
+    list.innerHTML='';
+    state.accounts.forEach(a=>{
+      const item=document.createElement('div'); item.className='invest-item';
+      item.innerHTML=`<div>${a.name}</div><div>${money(a.guardado||0)}</div>`;
+      list.appendChild(item);
+    });
+  }
+
+  const totalEl = document.getElementById('guardado-total');
+  if(totalEl) totalEl.textContent = money(sum(state.accounts, x=>x.guardado||0));
+
   renderInvestLog();
+  renderInvestBoxes();
 }
+
 function renderInvestLog(){
-  const tbody = document.getElementById('invest-log-body'); tbody.innerHTML='';
+  const tbody = document.getElementById('invest-log-body'); 
+  if(!tbody) return;
+  tbody.innerHTML='';
   const arr = [...state.investments].sort((a,b)=> a.date < b.date ? 1 : -1);
   arr.forEach(i=>{
     const acc = state.accounts.find(a=>a.id === i.accountId);
@@ -301,9 +333,97 @@ function renderInvestLog(){
   });
 }
 
+/* caixinhas */
+function renderInvestBoxes(){
+  const container = document.getElementById('invest-boxes');
+  if(!container) return;
+  container.innerHTML='';
+
+  if(!state.investBoxes.length){
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'Nenhuma caixinha criada ainda. Crie uma acima para organizar seus investimentos.';
+    container.appendChild(empty);
+    return;
+  }
+
+  state.investBoxes.forEach(box=>{
+    const acc = state.accounts.find(a=>a.id===box.accountId);
+    const card = document.createElement('div');
+    card.className = 'box-card';
+    card.innerHTML = `
+      <div class="box-header">
+        <div>
+          <div class="box-name">${box.name}</div>
+          <div class="box-desc">${box.desc || ''}</div>
+        </div>
+        <div class="box-amount">${money(box.amount||0)}</div>
+      </div>
+      <div class="box-body">
+        <label>Conta</label>
+        <select class="box-account-select" data-id="${box.id}">
+          ${state.accounts.map(a=>`<option value="${a.id}" ${a.id===box.accountId?'selected':''}>${a.name}</option>`).join('')}
+        </select>
+        <label>Valor para guardar</label>
+        <div class="box-input-row">
+          <input type="number" step="0.01" class="box-amount-input" data-id="${box.id}" placeholder="R$ 0,00">
+          <button type="button" class="btn small box-save" data-id="${box.id}">Guardar</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll('.box-account-select').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      const id = e.target.dataset.id;
+      const box = state.investBoxes.find(b=>b.id===id);
+      if(!box) return;
+      box.accountId = e.target.value;
+      saveState();
+      updateAll();
+    });
+  });
+
+  container.querySelectorAll('.box-save').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      const box = state.investBoxes.find(b=>b.id===id);
+      if(!box) return;
+      const input = container.querySelector(`input.box-amount-input[data-id="${id}"]`);
+      const amount = Number(input.value || 0);
+      if(!amount || amount<=0){ alert('Valor inválido.'); return; }
+      const acc = state.accounts.find(a=>a.id===box.accountId);
+      if(!acc){ alert('Conta inválida.'); return; }
+      if(Number(acc.saldo||0) < amount){
+        if(!confirm('Saldo pode ficar negativo. Continuar?')) return;
+      }
+      acc.saldo = Number(acc.saldo||0) - amount;
+      acc.guardado = Number(acc.guardado||0) + amount;
+      box.amount = Number(box.amount||0) + amount;
+
+      const entry = {
+        id: Date.now().toString(),
+        date: todayISO(),
+        accountId: box.accountId,
+        action: 'guardar',
+        amount,
+        desc: box.name ? `[${box.name}] ${box.desc||''}` : (box.desc||'')
+      };
+      state.investments.push(entry);
+      saveState();
+      updateAll();
+      input.value='';
+      alert('Valor guardado na caixinha.');
+    });
+  });
+}
+
 /* log */
 function renderLogTable(){
-  const tbody = document.getElementById('log-body'); tbody.innerHTML='';
+  const tbody = document.getElementById('log-body'); 
+  if(!tbody) return;
+  tbody.innerHTML='';
   const accountFilter = document.getElementById('log-account-filter').value;
   const onlyMonth = document.getElementById('log-show-only-month').checked;
   const month = getActiveMonth();
@@ -354,25 +474,33 @@ function applyExpenseReverse(exp){
   }
 }
 
-/* invest action */
-function handleInvestAction(){
-  const accountId = document.getElementById('invest-account').value;
-  const amount = Number(document.getElementById('invest-amount').value || 0);
-  const action = document.getElementById('invest-action').value;
-  const desc = document.getElementById('invest-desc').value.trim() || '';
-  if(!amount || amount <= 0){ alert('Valor inválido'); return; }
-  const acc = state.accounts.find(a=>a.id===accountId);
-  if(!acc){ alert('Conta inválida'); return; }
-  if(Number(acc.saldo||0) < amount){
-    if(!confirm('Saldo pode ficar negativo. Continuar?')) return;
+/* criar caixinha */
+function handleCreateBox(){
+  const name = document.getElementById('box-name').value.trim();
+  const accountId = document.getElementById('box-account').value;
+  const desc = document.getElementById('box-desc').value.trim();
+
+  if(!name){
+    alert('Dê um nome para a caixinha.');
+    return;
   }
-  acc.saldo = Number(acc.saldo||0) - amount;
-  acc.guardado = Number(acc.guardado||0) + amount;
-  const entry = { id: Date.now().toString(), date: todayISO(), accountId, action, amount, desc };
-  state.investments.push(entry); saveState(); updateAll();
-  document.getElementById('invest-amount').value = '';
-  document.getElementById('invest-desc').value = '';
-  alert('Guardado registrado.');
+  if(!accountId){
+    alert('Escolha uma conta para a caixinha.');
+    return;
+  }
+
+  const box = {
+    id: Date.now().toString(),
+    name,
+    accountId,
+    desc,
+    amount: 0
+  };
+  state.investBoxes.push(box);
+  saveState();
+  document.getElementById('box-name').value = '';
+  document.getElementById('box-desc').value = '';
+  updateAll();
 }
 
 /* submit gasto/entrada */
@@ -441,9 +569,12 @@ function applyStartMonthConfig(){
   alert('Dados do início do mês aplicados.');
 }
 function clearStartMonthFields(){
-  document.getElementById('inicio-vr-total').value = '';
-  document.getElementById('inicio-entrada-total').value = '';
-  document.getElementById('inicio-credit-global').value = '';
+  const vrInput = document.getElementById('inicio-vr-total');
+  const entInput = document.getElementById('inicio-entrada-total');
+  const credInput = document.getElementById('inicio-credit-global');
+  if(vrInput) vrInput.value = '';
+  if(entInput) entInput.value = '';
+  if(credInput) credInput.value = '';
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
 }
@@ -528,23 +659,31 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderEditableAccounts();
   updateAll();
 
-  document.getElementById('exp-date').value = todayISO();
-  document.getElementById('expense-form').addEventListener('submit', handleExpenseSubmit);
-  document.getElementById('invest-submit').addEventListener('click', handleInvestAction);
-  document.getElementById('apply-start-month').addEventListener('click', applyStartMonthConfig);
-  document.getElementById('clear-start-month').addEventListener('click', clearStartMonthFields);
+  const expDate = document.getElementById('exp-date');
+  if(expDate) expDate.value = todayISO();
+  const expForm = document.getElementById('expense-form');
+  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
 
-  document.getElementById('log-account-filter').addEventListener('change', renderLogTable);
-  document.getElementById('log-show-only-month').addEventListener('change', renderLogTable);
+  const applyBtn = document.getElementById('apply-start-month');
+  const clearBtn = document.getElementById('clear-start-month');
+  if(applyBtn) applyBtn.addEventListener('click', applyStartMonthConfig);
+  if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
+
+  const logFilter = document.getElementById('log-account-filter');
+  const logOnlyMonth = document.getElementById('log-show-only-month');
+  if(logFilter) logFilter.addEventListener('change', renderLogTable);
+  if(logOnlyMonth) logOnlyMonth.addEventListener('change', renderLogTable);
 
   const includeToggle = document.getElementById('include-start-entrada');
   if(includeToggle) includeToggle.addEventListener('change', ()=>{ renderEntradaPie(); });
 
-  document.getElementById('save-btn').addEventListener('click', ()=>{
+  const saveBtn = document.getElementById('save-btn');
+  const resetBtn = document.getElementById('reset-btn');
+  if(saveBtn) saveBtn.addEventListener('click', ()=>{
     saveState();
     alert('Salvo localmente.');
   });
-  document.getElementById('reset-btn').addEventListener('click', ()=>{
+  if(resetBtn) resetBtn.addEventListener('click', ()=>{
     if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
     state = JSON.parse(JSON.stringify(DEFAULT));
     state.meta.baseMonth = (new Date()).toISOString().slice(0,7);
@@ -557,6 +696,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const backupImportInput = document.getElementById('backup-import-input');
   if(backupExportBtn) backupExportBtn.addEventListener('click', exportBackup);
   if(backupImportInput) backupImportInput.addEventListener('change', handleBackupImport);
+
+  const boxCreateBtn = document.getElementById('box-create');
+  if(boxCreateBtn) boxCreateBtn.addEventListener('click', handleCreateBox);
 });
 
 function updateAll(){
