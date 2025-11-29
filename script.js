@@ -84,17 +84,26 @@ function calcDerived(month){
 let gastoChart=null, categoryChart=null, monthlyChart=null, entradaChart=null;
 
 function renderAccountsTable(){
-  const tbody = document.getElementById('accounts-body'); tbody.innerHTML='';
+  const tbody = document.getElementById('accounts-body');
+  tbody.innerHTML = '';
   const month = getActiveMonth();
   const sums = monthlySumsByAccount(month);
-  state.accounts.forEach(a=>{
+
+  state.accounts.forEach(a => {
     const s = sums[a.id] || { gasto_credito:0, gasto_vr:0, gasto_saldo:0 };
+    const isCaju = a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr');
+
+    // Só mostra valor de VR para a conta Caju; demais ficam vazios
+    const vrCellContent = isCaju ? money(s.gasto_vr) : '';
+
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${a.name}</td>
+    tr.innerHTML = `
+      <td>${a.name}</td>
       <td>${money(a.saldo)}</td>
       <td>${money(s.gasto_credito)}</td>
-      <td>${money(s.gasto_vr)}</td>
-      <td>${money(a.guardado||0)}</td>`;
+      <td>${vrCellContent}</td>
+      <td>${money(a.guardado || 0)}</td>
+    `;
     tbody.appendChild(tr);
   });
 }
@@ -688,10 +697,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderEditableAccounts();
   updateAll();
 
-  const expDate = document.getElementById('exp-date');
-  if(expDate) expDate.value = todayISO();
-  const expForm = document.getElementById('expense-form');
-  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
+  // Quando escolher "Gasto no VR (Caju)", selecionar automaticamente o banco Caju
+  const expTypeSel = document.getElementById('exp-type');
+  const expAccountSel = document.getElementById('exp-account');
+  if (expTypeSel && expAccountSel) {
+    expTypeSel.addEventListener('change', () => {
+      if (expTypeSel.value === 'vr') {
+        const caju = state.accounts.find(a =>
+          a.name.toLowerCase().includes('caju') ||
+          a.name.toLowerCase().includes('vr')
+        );
+        if (caju) {
+          expAccountSel.value = caju.id;
+        }
+      }
+    });
+  }
 
   const applyBtn = document.getElementById('apply-start-month');
   const clearBtn = document.getElementById('clear-start-month');
