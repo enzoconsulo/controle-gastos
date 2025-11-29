@@ -452,25 +452,54 @@ function renderLogTable(){
 
 /* efeitos dos lançamentos */
 function applyExpenseEffects(exp){
+  // Se for VR, força sempre para a conta Caju
   if(exp.type === 'vr'){
-    const caju = state.accounts.find(a=>a.name.toLowerCase().includes('caju'));
-    if(caju) exp.accountId = caju.id;
+    const caju = state.accounts.find(a =>
+      a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr')
+    );
+    if(caju) {
+      exp.accountId = caju.id;
+    }
   }
+
   const acc = state.accounts.find(a=>a.id===exp.accountId);
   if(!acc) return;
-  if(exp.type === 'saldo'){ acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0); }
+
+  if(exp.type === 'saldo'){
+    // débito normal no saldo
+    acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
+  }
   else if(exp.type === 'entrada'){
+    // entrada: soma no saldo e, se categoria for investimento, soma no guardado também
     acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
-    if(exp.category === 'investimento') acc.guardado = Number(acc.guardado||0) + Number(exp.amount||0);
+    if(exp.category === 'investimento'){
+      acc.guardado = Number(acc.guardado||0) + Number(exp.amount||0);
+    }
+  }
+  else if(exp.type === 'vr'){
+    // gasto em VR: DEBITA do saldo do Caju também
+    acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
   }
 }
+
 function applyExpenseReverse(exp){
   const acc = state.accounts.find(a=>a.id===exp.accountId);
   if(!acc) return;
-  if(exp.type === 'saldo'){ acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0); }
+
+  if(exp.type === 'saldo'){
+    // desfaz débito de saldo
+    acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
+  }
   else if(exp.type === 'entrada'){
+    // desfaz entrada
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
-    if(exp.category === 'investimento') acc.guardado = Number(acc.guardado||0) - Number(exp.amount||0);
+    if(exp.category === 'investimento'){
+      acc.guardado = Number(acc.guardado||0) - Number(exp.amount||0);
+    }
+  }
+  else if(exp.type === 'vr'){
+    // desfaz gasto em VR: devolve pro saldo do Caju
+    acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
   }
 }
 
