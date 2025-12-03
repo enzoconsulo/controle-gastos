@@ -17,6 +17,29 @@ const DEFAULT = {
 
 let state = loadState();
 
+/* helpers básicos */
+
+function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+const sum = (arr, fn)=> arr.reduce((s,x)=> s + (Number(fn?fn(x):x)||0), 0);
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+/* "mês lógico" de fatura: 24→23 */
+function billingMonthOf(d){
+  if(!d) return '';
+  const parts = d.split('-').map(Number);
+  if(parts.length < 3) return '';
+  let [y,m,day] = parts;
+  if(!y || !m || !day) return '';
+  if(day >= 24){
+    m += 1;
+    if(m > 12){
+      m = 1;
+      y += 1;
+    }
+  }
+  return `${y}-${String(m).padStart(2,'0')}`;
+}
+
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -31,34 +54,34 @@ function loadState(){
       if(!s.startEntries) s.startEntries = [];
       if(!s.investBoxes) s.investBoxes = [];
       if(!s.meta) s.meta = DEFAULT.meta;
-      if(!s.meta.baseMonth) s.meta.baseMonth = new Date().toISOString().slice(0,7);
       if(!s.expenses) s.expenses = [];
       if(!s.investments) s.investments = [];
+      // ancora o índice no ciclo da fatura atual (24→23)
+      s.meta.baseMonth = billingMonthOf(todayISO());
       return s;
     }
   }catch(e){console.error(e);}
   const copy = JSON.parse(JSON.stringify(DEFAULT));
-  copy.meta.baseMonth = new Date().toISOString().slice(0,7);
+  copy.meta.baseMonth = billingMonthOf(todayISO());
   return copy;
 }
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
-function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
-const sum = (arr, fn)=> arr.reduce((s,x)=> s + (Number(fn?fn(x):x)||0), 0);
-function todayISO(){ return new Date().toISOString().slice(0,10); }
 function computeMonthFromOffset(offset){
-  const [y,m] = (state.meta.baseMonth || todayISO().slice(0,7)).split('-').map(Number);
+  const base = state.meta.baseMonth || billingMonthOf(todayISO());
+  const [y,m] = base.split('-').map(Number);
   const d = new Date(y, m - 1 + offset, 1);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
-function monthOf(d){ return (d||'').slice(0,7); }
 function getActiveMonth(){ return computeMonthFromOffset(state.meta.activeOffset); }
+
+/* agregações por "mês de fatura" */
 
 function monthlySumsByAccount(month){
   const map = {};
   state.accounts.forEach(a => map[a.id] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 });
   state.expenses
-    .filter(e => monthOf(e.date) === month)
+    .filter(e => billingMonthOf(e.date) === month)
     .forEach(e=>{
       if(!map[e.accountId]) map[e.accountId] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 };
       if(e.type === 'credito') map[e.accountId].gasto_credito += Number(e.amount||0);
@@ -156,7 +179,7 @@ function renderCategoryPie(){
   const month = getActiveMonth();
   const map = {};
   state.expenses
-    .filter(e => monthOf(e.date) === month)
+    .filter(e => billingMonthOf(e.date) === month)
     .forEach(e=>{
       if(e.type === 'entrada') return;
       map[e.category] = (map[e.category]||0) + Number(e.amount||0);
@@ -181,7 +204,7 @@ function monthlyTotalsLastN(n=6){
   for(let i=state.meta.activeOffset-(n-1); i<=state.meta.activeOffset; i++){
     const month = computeMonthFromOffset(i);
     const total = state.expenses
-      .filter(e => monthOf(e.date) === month && e.type !== 'entrada')
+      .filter(e => billingMonthOf(e.date) === month && e.type !== 'entrada')
       .reduce((s,x)=>s+Number(x.amount||0),0);
     arr.push({month,total});
   }
@@ -214,7 +237,7 @@ function renderMonthlyLine(){
 function getEntradasDistribution(month, includeStart){
   const map = {};
   state.expenses
-    .filter(e => monthOf(e.date) === month && e.type === 'entrada')
+    .filter(e => billingMonthOf(e.date) === month && e.type === 'entrada')
     .forEach(e=>{
       map[e.accountId] = (map[e.accountId]||0) + Number(e.amount||0);
     });
@@ -453,7 +476,7 @@ function renderLogTable(){
   const onlyMonth = document.getElementById('log-show-only-month').checked;
   const month = getActiveMonth();
   let arr = state.expenses.slice();
-  if(onlyMonth) arr = arr.filter(e => monthOf(e.date) === month);
+  if(onlyMonth) arr = arr.filter(e => billingMonthOf(e.date) === month);
   if(accountFilter !== 'all') arr = arr.filter(e => e.accountId === accountFilter);
   arr.sort((a,b)=> a.date < b.date ? 1 : -1);
   arr.forEach(exp=>{
@@ -551,6 +574,17 @@ function handleCreateBox(){
   updateAll();
 }
 
+/* troca de aba programática */
+function activateTab(tabName){
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel=>{
+    panel.classList.toggle('active', panel.id === 'tab-' + tabName);
+  });
+}
+
+/* submit gasto/entrada — sem reload, atualiza tudo na hora e vai pro dashboard */
 function handleExpenseSubmit(e){
   e.preventDefault();
   const date = document.getElementById('exp-date').value || todayISO();
@@ -579,12 +613,10 @@ function handleExpenseSubmit(e){
   saveState();
   updateAll();
 
-  // limpa campos principais
   document.getElementById('exp-amount').value = '';
   document.getElementById('exp-desc').value = '';
   document.getElementById('exp-method').value = '';
 
-  // depois de registrar, vai para o dashboard
   activateTab('dashboard');
 }
 
@@ -683,17 +715,6 @@ function handleBackupImport(e){
   reader.readAsText(file);
 }
 
-function activateTab(tabName){
-  // ativa o botão da aba
-  document.querySelectorAll('.tab-btn').forEach(btn=>{
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
-  });
-  // mostra o painel correspondente
-  document.querySelectorAll('.tab-panel').forEach(panel=>{
-    panel.classList.toggle('active', panel.id === 'tab-' + tabName);
-  });
-}
-
 /* init */
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -770,7 +791,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(resetBtn) resetBtn.addEventListener('click', ()=>{
     if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
     state = JSON.parse(JSON.stringify(DEFAULT));
-    state.meta.baseMonth = (new Date()).toISOString().slice(0,7);
+    state.meta.baseMonth = billingMonthOf(todayISO());
     state.meta.activeOffset = 0;
     saveState();
     location.reload();
