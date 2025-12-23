@@ -620,41 +620,73 @@ function handleExpenseSubmit(e){
   activateTab('dashboard');
 }
 
-/* início do mês */
 function applyStartMonthConfig(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
   const globalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
 
-  state.totals.vr_total = vr;
-  state.totals.entrada = entrada;
+  const month = getActiveMonth();
+
+  const prevCredit = Number(state.totals.credito_total || 0);
+  const sums = monthlySumsByAccount(month);
+  const usedCredit = sum(Object.values(sums), x => x.gasto_credito);
+  const leftoverCredit = prevCredit - usedCredit;
+
+  /* substitui crédito global */
   state.totals.credito_total = globalCredit;
 
+  /* se sobrou crédito, joga no Nubank */
+  if(leftoverCredit > 0){
+    const nubank = state.accounts.find(a =>
+      a.name.toLowerCase().includes('nubank')
+    );
+    if(nubank){
+      nubank.saldo = Number(nubank.saldo || 0) + leftoverCredit;
+    }
+  }
+  state.totals.vr_total = vr;
+  const caju = state.accounts.find(a =>
+    a.name.toLowerCase().includes('caju') ||
+    a.name.toLowerCase().includes('vr')
+  );
+  if(caju){
+    caju.saldo = Number(vr || 0);
+  }
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits){
     state.accounts.forEach((acc, idx) => {
       const inp = inicioCredits.querySelector(`input[data-acc="${idx}"]`);
-      const val = inp ? Number(inp.value || 0) : Number(acc.credit_total || 0);
-      acc.credit_total = val;
+      if(inp){
+        acc.credit_total = Number(inp.value || 0);
+      }
     });
   }
+  state.totals.entrada = entrada;
+  const itau = state.accounts.find(a =>
+    a.name.toLowerCase().includes('itau')
+  );
+  if(itau && entrada > 0){
+    // registra no startEntries
+    state.startEntries = (state.startEntries || []).filter(
+      se => !(se.month === month && se.accountId === itau.id)
+    );
+    state.startEntries.push({
+      month,
+      accountId: itau.id,
+      amount: entrada
+    });
 
-  const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
-  if(caju) caju.saldo = Number(vr || 0);
-
-  const month = getActiveMonth();
-  const itau = state.accounts.find(a => a.name.toLowerCase().includes('itau'));
-  if(itau){
-    state.startEntries = (state.startEntries || []).filter(se => !(se.month === month && se.accountId === itau.id));
-    if(entrada && entrada > 0){
-      state.startEntries.push({ month, accountId: itau.id, amount: Number(entrada) });
-      itau.saldo = Number(entrada);
-    }
+    itau.saldo = Number(itau.saldo || 0) + entrada;
   }
 
   saveState();
   updateAll();
-  alert('Dados do início do mês aplicados.');
+
+  let msg = 'Dados do início do mês aplicados.';
+  if(leftoverCredit > 0){
+    msg += ` Sobra de crédito (${money(leftoverCredit)}) adicionada ao Nubank.`;
+  }
+  alert(msg);
 }
 function clearStartMonthFields(){
   const vrInput = document.getElementById('inicio-vr-total');
