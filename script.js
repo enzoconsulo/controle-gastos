@@ -623,27 +623,45 @@ function handleExpenseSubmit(e){
 function applyStartMonthConfig(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
-  const globalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
+  const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
 
-  const month = getActiveMonth();
+  const currentMonth = getActiveMonth();
+  const prevMonth = computeMonthFromOffset(state.meta.activeOffset - 1);
 
-  const prevCredit = Number(state.totals.credito_total || 0);
-  const sums = monthlySumsByAccount(month);
-  const usedCredit = sum(Object.values(sums), x => x.gasto_credito);
-  const leftoverCredit = prevCredit - usedCredit;
+  /* =========================================
+     1) FECHAMENTO DO CRÉDITO DO MÊS ANTERIOR
+     ========================================= */
 
-  /* substitui crédito global */
-  state.totals.credito_total = globalCredit;
+  const prevCreditTotal = Number(state.totals.credito_total || 0);
 
-  /* se sobrou crédito, joga no Nubank */
-  if(leftoverCredit > 0){
-    const nubank = state.accounts.find(a =>
-      a.name.toLowerCase().includes('nubank')
-    );
-    if(nubank){
-      nubank.saldo = Number(nubank.saldo || 0) + leftoverCredit;
-    }
+  let creditUsedPrevMonth = 0;
+  state.expenses
+    .filter(e =>
+      billingMonthOf(e.date) === prevMonth &&
+      e.type === 'credito'
+    )
+    .forEach(e => {
+      creditUsedPrevMonth += Number(e.amount || 0);
+    });
+
+  const creditBalance = prevCreditTotal - creditUsedPrevMonth;
+
+  /* joga a diferença (positiva ou negativa) no Nubank */
+  const nubank = state.accounts.find(a =>
+    a.name.toLowerCase().includes('nubank')
+  );
+  if(nubank && creditBalance !== 0){
+    nubank.saldo = Number(nubank.saldo || 0) + creditBalance;
   }
+
+  /* =========================================
+     2) ATUALIZA CRÉDITO GLOBAL (SUBSTITUI)
+     ========================================= */
+  state.totals.credito_total = newGlobalCredit;
+
+  /* =========================================
+     3) VR → CAJU (SOBRESCREVE)
+     ========================================= */
   state.totals.vr_total = vr;
   const caju = state.accounts.find(a =>
     a.name.toLowerCase().includes('caju') ||
@@ -652,6 +670,10 @@ function applyStartMonthConfig(){
   if(caju){
     caju.saldo = Number(vr || 0);
   }
+
+  /* =========================================
+     4) CRÉDITO POR CONTA (INPUTS)
+     ========================================= */
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits){
     state.accounts.forEach((acc, idx) => {
@@ -661,17 +683,20 @@ function applyStartMonthConfig(){
       }
     });
   }
+
+  /* =========================================
+     5) ENTRADA DO MÊS → ITAU (SOMA)
+     ========================================= */
   state.totals.entrada = entrada;
   const itau = state.accounts.find(a =>
     a.name.toLowerCase().includes('itau')
   );
   if(itau && entrada > 0){
-    // registra no startEntries
     state.startEntries = (state.startEntries || []).filter(
-      se => !(se.month === month && se.accountId === itau.id)
+      se => !(se.month === currentMonth && se.accountId === itau.id)
     );
     state.startEntries.push({
-      month,
+      month: currentMonth,
       accountId: itau.id,
       amount: entrada
     });
@@ -682,11 +707,10 @@ function applyStartMonthConfig(){
   saveState();
   updateAll();
 
-  let msg = 'Dados do início do mês aplicados.';
-  if(leftoverCredit > 0){
-    msg += ` Sobra de crédito (${money(leftoverCredit)}) adicionada ao Nubank.`;
-  }
-  alert(msg);
+  alert(
+    `Início do mês aplicado.\n` +
+    `Fechamento do crédito anterior: ${money(creditBalance)}`
+  );
 }
 function clearStartMonthFields(){
   const vrInput = document.getElementById('inicio-vr-total');
