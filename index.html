@@ -9,7 +9,7 @@
 <body>
   <header class="title">
     <h1>Controle de Gastos</h1>
-    <p class="muted">Visão mensal de saldo, crédito global, VR e investimentos</p>
+    <p class="muted">Visão mensal — ciclo 24→23</p>
   </header>
 
   <div class="month-incrementer">
@@ -25,7 +25,8 @@
   <nav class="tabs">
     <button data-tab="dashboard" class="tab-btn active">Dashboard</button>
     <button data-tab="input" class="tab-btn">Input</button>
-    <button data-tab="inicio" class="tab-btn">Início do mês</button>
+    <button data-tab="virada" class="tab-btn">Virada do Cartão</button>
+    <button data-tab="salario" class="tab-btn">Entrada (Salário)</button>
     <button data-tab="invest" class="tab-btn">Investimentos</button>
     <button data-tab="log" class="tab-btn">Log</button>
   </nav>
@@ -165,24 +166,24 @@
       </div>
     </section>
 
-    <!-- INÍCIO DO MÊS -->
-    <section id="tab-inicio" class="tab-panel inputs">
-      <h2 class="panel-title">Início do mês</h2>
-      <p class="muted">Defina VR (Caju), entrada inicial do mês e crédito global.</p>
+    <!-- VIRADA DO CARTÃO -->
+    <section id="tab-virada" class="tab-panel inputs">
+      <h2 class="panel-title">Virada do Cartão (fechamento do ciclo)</h2>
+      <p class="muted">Use esta tela no dia 24 para fechar o ciclo do cartão e definir o novo limite.</p>
 
       <div class="monthly-config">
         <div class="month-totals">
           <div class="tot-block">
             <label>VR total (Caju)</label>
-            <input id="inicio-vr-total" type="number" step="0.01" />
+            <input id="card-vr-total" type="number" step="0.01" />
           </div>
           <div class="tot-block">
-            <label>Entrada inicial</label>
-            <input id="inicio-entrada-total" type="number" step="0.01" />
+            <label>Novo limite (crédito global) ↓</label>
+            <input id="card-new-credit" type="number" step="0.01" />
           </div>
           <div class="tot-block">
-            <label>Crédito global</label>
-            <input id="inicio-credit-global" type="number" step="0.01" />
+            <label>(Opicional) Observação</label>
+            <input id="card-note" type="text" />
           </div>
         </div>
 
@@ -190,10 +191,36 @@
         <div id="inicio-credits" class="editable-accounts"></div>
 
         <div class="actions actions-right">
-          <button id="apply-start-month" class="btn">Aplicar</button>
-          <button id="clear-start-month" class="btn ghost">Limpar</button>
+          <button id="apply-card-close" class="btn">Fechar cartão e aplicar limite</button>
+          <button id="clear-card" class="btn ghost">Limpar</button>
         </div>
       </div>
+    </section>
+
+    <!-- SALÁRIO / ENTRADA -->
+    <section id="tab-salario" class="tab-panel inputs">
+      <h2 class="panel-title">Entrada de Salário</h2>
+      <p class="muted">Use esta tela quando seu salário cair (30/31/1). Não altera limite do cartão.</p>
+
+      <form id="salary-form" class="form-grid">
+        <div class="form-field">
+          <label>Valor (R$)</label>
+          <input id="salary-amount" type="number" step="0.01" />
+        </div>
+        <div class="form-field">
+          <label>Banco</label>
+          <select id="salary-account">
+            <!-- preenchido pelo JS -->
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Data (opcional)</label>
+          <input id="salary-date" type="date" />
+        </div>
+        <div class="form-actions">
+          <button id="apply-salary-entry" class="btn-primary" type="button">Adicionar entrada</button>
+        </div>
+      </form>
     </section>
 
     <!-- INVESTIMENTOS -->
