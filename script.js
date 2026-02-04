@@ -1,5 +1,3 @@
-/* script.js — versão com Virada do Cartão (24→23) separada da Entrada de Salário */
-
 const STORAGE_KEY = "controleExcel_v10";
 
 const DEFAULT = {
@@ -20,6 +18,7 @@ const DEFAULT = {
 let state = loadState();
 
 /* helpers básicos */
+
 function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 const sum = (arr, fn)=> arr.reduce((s,x)=> s + (Number(fn?fn(x):x)||0), 0);
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -55,9 +54,10 @@ function loadState(){
       if(!s.startEntries) s.startEntries = [];
       if(!s.investBoxes) s.investBoxes = [];
       if(!s.meta) s.meta = DEFAULT.meta;
-      if(!s.meta.baseMonth) s.meta.baseMonth = billingMonthOf(todayISO());
       if(!s.expenses) s.expenses = [];
       if(!s.investments) s.investments = [];
+      // ancora o índice no ciclo da fatura atual (24→23)
+      s.meta.baseMonth = billingMonthOf(todayISO());
       return s;
     }
   }catch(e){console.error(e);}
@@ -76,6 +76,7 @@ function computeMonthFromOffset(offset){
 function getActiveMonth(){ return computeMonthFromOffset(state.meta.activeOffset); }
 
 /* agregações por "mês de fatura" */
+
 function monthlySumsByAccount(month){
   const map = {};
   state.accounts.forEach(a => map[a.id] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 });
@@ -106,7 +107,7 @@ function calcDerived(month){
   return { sumsByAccount: sums, total_gasto_credito, available_credit_total, available_vr, guardado_total, saldo_display, credito_debito };
 }
 
-/* ---------- render (mantive suas funções) ---------- */
+/* ---------- render ---------- */
 let gastoChart=null, categoryChart=null, monthlyChart=null, entradaChart=null;
 
 function renderAccountsTable(){
@@ -277,13 +278,11 @@ function populateAccountSelects(){
   const selLog = document.getElementById('log-account-filter');
   const selInvest = document.getElementById('invest-account');
   const boxSel = document.getElementById('box-account');
-  const salarySel = document.getElementById('salary-account');
 
   if(sel) sel.innerHTML='';
   if(selLog) selLog.innerHTML='<option value="all">Todas</option>';
   if(selInvest) selInvest.innerHTML='';
   if(boxSel) boxSel.innerHTML='';
-  if(salarySel) salarySel.innerHTML='';
 
   state.accounts.forEach(a=>{
     if(sel){
@@ -297,9 +296,6 @@ function populateAccountSelects(){
     }
     if(boxSel){
       const o4=document.createElement('option'); o4.value=a.id; o4.textContent=a.name; boxSel.appendChild(o4);
-    }
-    if(salarySel){
-      const o5=document.createElement('option'); o5.value=a.id; o5.textContent=a.name; salarySel.appendChild(o5);
     }
   });
 
@@ -322,9 +318,11 @@ function populateAccountSelects(){
     });
   }
 
-  const vrInput = document.getElementById('card-vr-total');
-  const credInput = document.getElementById('card-new-credit');
+  const vrInput = document.getElementById('inicio-vr-total');
+  const entInput = document.getElementById('inicio-entrada-total');
+  const credInput = document.getElementById('inicio-credit-global');
   if(vrInput) vrInput.value = state.totals.vr_total || 0;
+  if(entInput) entInput.value = state.totals.entrada || 0;
   if(credInput) credInput.value = state.totals.credito_total || 0;
 }
 
@@ -622,21 +620,16 @@ function handleExpenseSubmit(e){
   activateTab('dashboard');
 }
 
-/* =========================================
-   NOVA FUNÇÃO: Fechar ciclo do cartão (Virada do Cartão)
-   - calcula saldo do crédito do mês anterior e aplica sobra/falta no Nubank
-   - substitui crédito global pelo novo valor
-   - atualiza VR/Caju se informado
-   ========================================= */
-function applyCardCloseConfig(){
-  const vr = Number(document.getElementById('card-vr-total').value || 0);
-  const newGlobalCredit = Number(document.getElementById('card-new-credit').value || 0);
+function applyStartMonthConfig(){
+  // lê valores da UI
+  const vr = Number(document.getElementById('inicio-vr-total').value || 0);
+  const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
+
   const currentMonth = getActiveMonth();
   const prevMonth = computeMonthFromOffset(state.meta.activeOffset - 1);
 
-  // crédito do período anterior
+  /* 1) fechar o ciclo do cartão: calcular gasto de crédito do mês anterior */
   const prevCreditTotal = Number(state.totals.credito_total || 0);
-
   let creditUsedPrevMonth = 0;
   state.expenses
     .filter(e => billingMonthOf(e.date) === prevMonth && e.type === 'credito')
@@ -644,88 +637,69 @@ function applyCardCloseConfig(){
 
   const creditBalance = prevCreditTotal - creditUsedPrevMonth;
 
-  // aplica sobra/falta ao Nubank
+  /* 2) aplicar sobra/falta no Nubank */
   const nubank = state.accounts.find(a => a.name.toLowerCase().includes('nubank'));
   if(nubank && creditBalance !== 0){
     nubank.saldo = Number(nubank.saldo || 0) + creditBalance;
   }
 
-  // substitui crédito global
+  /* 3) substituir crédito global pelo novo valor informado */
   state.totals.credito_total = newGlobalCredit;
 
-  // VR -> Caju (se inserido)
+  /* 4) atualizar VR -> Caju (sobrescreve saldo do Caju) */
   state.totals.vr_total = vr;
   const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   if(caju){
     caju.saldo = Number(vr || 0);
   }
 
-  // créditos por conta (inputs)
+  /* 5) atualizar créditos por conta (inputs dentro do inicio-credits) */
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits){
     state.accounts.forEach((acc, idx) => {
       const inp = inicioCredits.querySelector(`input[data-acc="${idx}"]`);
-      if(inp) acc.credit_total = Number(inp.value || 0);
+      if(inp){
+        acc.credit_total = Number(inp.value || 0);
+      }
     });
   }
 
   saveState();
   updateAll();
-  alert(`Fechamento aplicado. Saldo do ciclo anterior: ${money(creditBalance)} (aplicado no Nubank).`);
+
+  alert(
+    `Virada do cartão aplicada.\n` +
+    `Fechamento do ciclo anterior: ${money(creditBalance)} (aplicado no Nubank).`
+  );
 }
 
-/* =========================================
-   NOVA FUNÇÃO: Entrada de salário (separada)
-   - soma ao saldo do banco escolhido e registra entrada
-   ========================================= */
-function applySalaryEntry(){
-  const amount = Number(document.getElementById('salary-amount').value || 0);
-  if(!amount || amount <= 0){ alert('Valor inválido'); return; }
-  const accountId = document.getElementById('salary-account').value;
-  const date = document.getElementById('salary-date').value || todayISO();
+function applyStartSalary(){
+  const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
+  if(!entrada || entrada <= 0){
+    alert('Informe um valor de entrada válido.');
+    return;
+  }
 
-  const acc = state.accounts.find(a => a.id === accountId);
-  if(!acc){ alert('Conta inválida'); return; }
-
-  // soma ao saldo
-  acc.saldo = Number(acc.saldo || 0) + Number(amount);
-
-  // registra no estado como entrada (para relatórios)
-  const entry = {
-    id: Date.now().toString(),
-    date,
-    desc: 'Entrada (salário)',
-    amount,
-    type: 'entrada',
-    accountId,
-    method: 'salário',
-    category: 'entrada'
-  };
-  state.expenses.push(entry);
-
-  // opcional: marca startEntries (mantém compatibilidade com gráficos)
   const month = getActiveMonth();
-  state.startEntries = (state.startEntries || []).filter(se => !(se.month === month && se.accountId === accountId));
-  state.startEntries.push({ month, accountId, amount });
+  const itau = state.accounts.find(a => a.name.toLowerCase().includes('itau'));
+  if(!itau){
+    alert('Conta Itaú não encontrada nas contas.');
+    return;
+  }
 
+  // gravar em startEntries (mantém compatibilidade com gráficos)
+  state.startEntries = (state.startEntries || []).filter(se => !(se.month === month && se.accountId === itau.id));
+  state.startEntries.push({ month, accountId: itau.id, amount: Number(entrada) });
+
+  // somar ao saldo do Itau (soma, não sobrescreve)
+  itau.saldo = Number(itau.saldo || 0) + Number(entrada);
+
+  // salvar e atualizar
+  state.totals.entrada = entrada;
   saveState();
   updateAll();
-  alert(`Entrada de ${money(amount)} adicionada em ${acc.name}.`);
-  document.getElementById('salary-amount').value = '';
-  document.getElementById('salary-date').value = '';
-  activateTab('dashboard');
-}
 
-/* clear for card inputs */
-function clearCardFields(){
-  const vrInput = document.getElementById('card-vr-total');
-  const credInput = document.getElementById('card-new-credit');
-  const note = document.getElementById('card-note');
-  if(vrInput) vrInput.value = '';
-  if(credInput) credInput.value = '';
-  if(note) note.value = '';
-  const inicioCredits = document.getElementById('inicio-credits');
-  if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
+  alert(`Entrada de ${money(entrada)} aplicada ao ${itau.name}.`);
 }
 
 /* backup: exportar/importar JSON */
@@ -830,13 +804,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
   }
 
-  const applyCardBtn = document.getElementById('apply-card-close');
-  const clearCardBtn = document.getElementById('clear-card');
-  if(applyCardBtn) applyCardBtn.addEventListener('click', applyCardCloseConfig);
-  if(clearCardBtn) clearCardBtn.addEventListener('click', clearCardFields);
-
-  const applySalaryBtn = document.getElementById('apply-salary-entry');
-  if(applySalaryBtn) applySalaryBtn.addEventListener('click', applySalaryEntry);
+  const applyBtn = document.getElementById('apply-start-month');
+  const applySalaryBtn = document.getElementById('apply-start-salary'); // novo
+  const clearBtn = document.getElementById('clear-start-month');
+  if(applyBtn) applyBtn.addEventListener('click', applyStartMonthConfig);
+  if(applySalaryBtn) applySalaryBtn.addEventListener('click', applyStartSalary); // liga o botão novo
+  if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
 
   const logFilter = document.getElementById('log-account-filter');
   const logOnlyMonth = document.getElementById('log-show-only-month');
