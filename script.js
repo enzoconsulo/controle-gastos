@@ -12,13 +12,21 @@ const DEFAULT = {
   investments: [],
   startEntries: [],
   investBoxes: [],
+  impressora3d: {
+    saldo: 0,
+    gastos: [],
+    produtos: [],
+    vendas: [],
+    logs: [],
+    reinvested: 0,
+    lucro: 0
+  },
   meta: { baseMonth: null, activeOffset: 0 }
 };
 
 let state = loadState();
 
 /* helpers básicos */
-
 function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 const sum = (arr, fn)=> arr.reduce((s,x)=> s + (Number(fn?fn(x):x)||0), 0);
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -54,10 +62,10 @@ function loadState(){
       if(!s.startEntries) s.startEntries = [];
       if(!s.investBoxes) s.investBoxes = [];
       if(!s.meta) s.meta = DEFAULT.meta;
+      if(!s.meta.baseMonth) s.meta.baseMonth = billingMonthOf(todayISO());
       if(!s.expenses) s.expenses = [];
       if(!s.investments) s.investments = [];
-      // ancora o índice no ciclo da fatura atual (24→23)
-      s.meta.baseMonth = billingMonthOf(todayISO());
+      if(!s.impressora3d) s.impressora3d = JSON.parse(JSON.stringify(DEFAULT.impressora3d));
       return s;
     }
   }catch(e){console.error(e);}
@@ -76,7 +84,6 @@ function computeMonthFromOffset(offset){
 function getActiveMonth(){ return computeMonthFromOffset(state.meta.activeOffset); }
 
 /* agregações por "mês de fatura" */
-
 function monthlySumsByAccount(month){
   const map = {};
   state.accounts.forEach(a => map[a.id] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 });
@@ -136,11 +143,16 @@ function renderAccountsTable(){
 
 function renderYellow(){
   const d = calcDerived(getActiveMonth());
-  document.getElementById('avail-credit').textContent = money(d.available_credit_total);
-  document.getElementById('avail-vr').textContent = money(d.available_vr);
-  document.getElementById('avail-saldo').textContent = money(d.saldo_display);
-  document.getElementById('avail-guardado').textContent = money(d.guardado_total);
-  document.getElementById('credit-debit-small').textContent = money(d.credito_debito);
+  const elAvailCredit = document.getElementById('avail-credit');
+  if(elAvailCredit) elAvailCredit.textContent = money(d.available_credit_total);
+  const elAvailVr = document.getElementById('avail-vr');
+  if(elAvailVr) elAvailVr.textContent = money(d.available_vr);
+  const elAvailSaldo = document.getElementById('avail-saldo');
+  if(elAvailSaldo) elAvailSaldo.textContent = money(d.saldo_display);
+  const elGuard = document.getElementById('avail-guardado');
+  if(elGuard) elGuard.textContent = money(d.guardado_total);
+  const elCreditDebit = document.getElementById('credit-debit-small');
+  if(elCreditDebit) elCreditDebit.textContent = money(d.credito_debito);
 }
 
 function baseChartOptions(){
@@ -279,10 +291,17 @@ function populateAccountSelects(){
   const selInvest = document.getElementById('invest-account');
   const boxSel = document.getElementById('box-account');
 
+  const imp3dAcc = document.getElementById('imp3d-exp-account');
+  const imp3dReinvAcc = document.getElementById('imp3d-reinvest-account');
+  const imp3dLucroAcc = document.getElementById('imp3d-lucro-account');
+
   if(sel) sel.innerHTML='';
   if(selLog) selLog.innerHTML='<option value="all">Todas</option>';
   if(selInvest) selInvest.innerHTML='';
   if(boxSel) boxSel.innerHTML='';
+  if(imp3dAcc) imp3dAcc.innerHTML = '';
+  if(imp3dReinvAcc) imp3dReinvAcc.innerHTML = '';
+  if(imp3dLucroAcc) imp3dLucroAcc.innerHTML = '';
 
   state.accounts.forEach(a=>{
     if(sel){
@@ -296,6 +315,15 @@ function populateAccountSelects(){
     }
     if(boxSel){
       const o4=document.createElement('option'); o4.value=a.id; o4.textContent=a.name; boxSel.appendChild(o4);
+    }
+    if(imp3dAcc){
+      const o5=document.createElement('option'); o5.value=a.id; o5.textContent=a.name; imp3dAcc.appendChild(o5);
+    }
+    if(imp3dReinvAcc){
+      const o6=document.createElement('option'); o6.value=a.id; o6.textContent=a.name; imp3dReinvAcc.appendChild(o6);
+    }
+    if(imp3dLucroAcc){
+      const o7=document.createElement('option'); o7.value=a.id; o7.textContent=a.name; imp3dLucroAcc.appendChild(o7);
     }
   });
 
@@ -620,8 +648,11 @@ function handleExpenseSubmit(e){
   activateTab('dashboard');
 }
 
+/* ===========================
+   Start month: Virada do cartão
+   (substitui o crédito global e aplica diferença do mês anterior ao Nubank)
+   =========================== */
 function applyStartMonthConfig(){
-  // lê valores da UI
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
 
@@ -634,26 +665,26 @@ function applyStartMonthConfig(){
   state.expenses
     .filter(e => billingMonthOf(e.date) === prevMonth && e.type === 'credito')
     .forEach(e => creditUsedPrevMonth += Number(e.amount || 0));
-
   const creditBalance = prevCreditTotal - creditUsedPrevMonth;
 
   /* 2) aplicar sobra/falta no Nubank */
   const nubank = state.accounts.find(a => a.name.toLowerCase().includes('nubank'));
   if(nubank && creditBalance !== 0){
     nubank.saldo = Number(nubank.saldo || 0) + creditBalance;
+    // log interno para 3D? não — isso é para cartão
   }
 
-  /* 3) substituir crédito global pelo novo valor informado */
+  /* 3) substituir crédito global */
   state.totals.credito_total = newGlobalCredit;
 
-  /* 4) atualizar VR -> Caju (sobrescreve saldo do Caju) */
+  /* 4) VR -> Caju (sobrescreve) */
   state.totals.vr_total = vr;
   const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   if(caju){
     caju.saldo = Number(vr || 0);
   }
 
-  /* 5) atualizar créditos por conta (inputs dentro do inicio-credits) */
+  /* 5) atualizar créditos por conta (inputs) */
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits){
     state.accounts.forEach((acc, idx) => {
@@ -667,12 +698,12 @@ function applyStartMonthConfig(){
   saveState();
   updateAll();
 
-  alert(
-    `Virada do cartão aplicada.\n` +
-    `Fechamento do ciclo anterior: ${money(creditBalance)} (aplicado no Nubank).`
-  );
+  alert(`Virada do cartão aplicada.\nFechamento do ciclo anterior: ${money(creditBalance)} (aplicado no Nubank).`);
 }
 
+/* ===========================
+   Nova: aplicar somente entrada do salário (soma em Itau)
+   =========================== */
 function applyStartSalary(){
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
   if(!entrada || entrada <= 0){
@@ -687,19 +718,282 @@ function applyStartSalary(){
     return;
   }
 
-  // gravar em startEntries (mantém compatibilidade com gráficos)
+  // registra em startEntries (compatível com gráficos)
   state.startEntries = (state.startEntries || []).filter(se => !(se.month === month && se.accountId === itau.id));
   state.startEntries.push({ month, accountId: itau.id, amount: Number(entrada) });
 
-  // somar ao saldo do Itau (soma, não sobrescreve)
+  // soma ao saldo (NÃO sobrescreve)
   itau.saldo = Number(itau.saldo || 0) + Number(entrada);
 
-  // salvar e atualizar
+  // grava totals.entrada para exibição
   state.totals.entrada = entrada;
+
   saveState();
   updateAll();
 
   alert(`Entrada de ${money(entrada)} aplicada ao ${itau.name}.`);
+}
+
+function clearStartMonthFields(){
+  const vrInput = document.getElementById('inicio-vr-total');
+  const entInput = document.getElementById('inicio-entrada-total');
+  const credInput = document.getElementById('inicio-credit-global');
+  if(vrInput) vrInput.value = '';
+  if(entInput) entInput.value = '';
+  if(credInput) credInput.value = '';
+  const inicioCredits = document.getElementById('inicio-credits');
+  if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
+}
+
+/* ===========================
+   Impressora3D integration
+   =========================== */
+
+function renderImpressora3D(){
+  const saldoEl = document.getElementById('imp3d-saldo');
+  const reinvEl = document.getElementById('imp3d-reinvested');
+  const lucroEl = document.getElementById('imp3d-lucro');
+  if(saldoEl) saldoEl.textContent = money(state.impressora3d.saldo);
+  if(reinvEl) reinvEl.textContent = money(state.impressora3d.reinvested || 0);
+  if(lucroEl) lucroEl.textContent = money(state.impressora3d.lucro || 0);
+
+  // produtos
+  const prodList = document.getElementById('imp3d-prod-list');
+  if(prodList){
+    prodList.innerHTML = '';
+    if(!state.impressora3d.produtos.length){
+      const p = document.createElement('p'); p.className='muted'; p.textContent = 'Nenhum produto cadastrado.';
+      prodList.appendChild(p);
+    } else {
+      state.impressora3d.produtos.forEach(p=>{
+        const card = document.createElement('div');
+        card.className = 'box-card';
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:600">${p.name}</div>
+              <div style="color:var(--muted);font-size:0.85rem">Preço: ${money(p.price)} • Custo: ${money(p.cost)} • Estoque: ${p.stock}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="number" min="1" value="1" class="prod-sell-qty" data-id="${p.id}" style="width:70px;padding:6px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03);color:var(--text)">
+                <select class="prod-sell-account" data-id="${p.id}" style="padding:6px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03);color:var(--text)"></select>
+                <button class="btn small prod-sell-btn" data-id="${p.id}">Vender</button>
+              </div>
+              <button class="btn ghost prod-delete" data-id="${p.id}">Excluir produto</button>
+            </div>
+          </div>
+        `;
+        prodList.appendChild(card);
+      });
+
+      // preencher accounts nas selects e ligar botões
+      prodList.querySelectorAll('.prod-sell-account').forEach(sel=>{
+        const id = sel.dataset.id;
+        sel.innerHTML = state.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+      });
+      prodList.querySelectorAll('.prod-sell-btn').forEach(btn=>{
+        btn.onclick = ()=>{
+          const id = btn.dataset.id;
+          const qtyInput = prodList.querySelector(`.prod-sell-qty[data-id="${id}"]`);
+          const qty = Number(qtyInput.value || 0);
+          const accSel = prodList.querySelector(`.prod-sell-account[data-id="${id}"]`);
+          const accId = accSel.value;
+          sellProduct(id, qty, accId);
+        };
+      });
+      prodList.querySelectorAll('.prod-delete').forEach(btn=>{
+        btn.onclick = ()=>{
+          const id = btn.dataset.id;
+          if(!confirm('Excluir produto?')) return;
+          state.impressora3d.produtos = state.impressora3d.produtos.filter(p=>p.id!==id);
+          saveState(); renderImpressora3D(); updateAll();
+        };
+      });
+    }
+  }
+
+  // 3D log
+  const tbody = document.getElementById('imp3d-log-body');
+  if(tbody){
+    tbody.innerHTML = '';
+    const arr = [...state.impressora3d.logs].sort((a,b)=> a.date < b.date ? 1 : -1);
+    arr.forEach(l=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${l.date}</td><td>${l.type}</td><td>${l.detail||''}</td><td>${money(l.amount)}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+/* registrar gasto 3D: cria expense type 'saldo' com category 'impressora3d' e adiciona ao impressora3d.gastos */
+function registerImp3DExpense(){
+  const amount = Number(document.getElementById('imp3d-exp-amount').value || 0);
+  const category = document.getElementById('imp3d-exp-category').value || 'filamento';
+  const accountId = document.getElementById('imp3d-exp-account').value;
+  const desc = document.getElementById('imp3d-exp-desc').value || '';
+
+  if(!amount || amount <= 0){ alert('Valor inválido'); return; }
+  if(!accountId){ alert('Escolha uma conta'); return; }
+
+  const exp = {
+    id: Date.now().toString(),
+    date: todayISO(),
+    desc: `[3D] ${desc}`,
+    amount,
+    type: 'saldo',
+    accountId,
+    method: '3D',
+    category: 'impressora3d'
+  };
+
+  applyExpenseEffects(exp);
+  state.expenses.push(exp);
+
+  // registra no subsistema 3D (gastos)
+  state.impressora3d.gastos.push(exp);
+  state.impressora3d.logs.push({ date: todayISO(), type: 'gasto', detail: `${category} (${accountId})`, amount: amount });
+
+  // descontar do saldo 3D se já tiver saldo
+  state.impressora3d.saldo = Number(state.impressora3d.saldo || 0) - Number(amount || 0);
+
+  saveState();
+  updateAll();
+  renderImpressora3D();
+
+  document.getElementById('imp3d-exp-amount').value = '';
+  document.getElementById('imp3d-exp-desc').value = '';
+}
+
+/* cadastrar produto */
+function addImp3DProduct(){
+  const name = document.getElementById('imp3d-prod-name').value.trim();
+  const cost = Number(document.getElementById('imp3d-prod-cost').value || 0);
+  const price = Number(document.getElementById('imp3d-prod-price').value || 0);
+  const stock = Number(document.getElementById('imp3d-prod-stock').value || 0);
+
+  if(!name){ alert('Informe o nome do produto'); return; }
+  if(price <= 0){ alert('Preço inválido'); return; }
+
+  const p = {
+    id: Date.now().toString(),
+    name, cost, price, stock
+  };
+  state.impressora3d.produtos.push(p);
+  saveState();
+  renderImpressora3D();
+
+  document.getElementById('imp3d-prod-name').value='';
+  document.getElementById('imp3d-prod-cost').value='';
+  document.getElementById('imp3d-prod-price').value='';
+  document.getElementById('imp3d-prod-stock').value='';
+}
+
+/* vender produto: diminui estoque, cria entrada no account, aumenta saldo 3D */
+function sellProduct(prodId, qty, accountId){
+  qty = Number(qty || 0);
+  if(qty <= 0){ alert('Quantidade inválida'); return; }
+  const prod = state.impressora3d.produtos.find(p=>p.id===prodId);
+  if(!prod){ alert('Produto não encontrado'); return; }
+  if(prod.stock < qty){ alert('Estoque insuficiente'); return; }
+  const revenue = Number(prod.price || 0) * qty;
+
+  // decrementar estoque
+  prod.stock = prod.stock - qty;
+
+  // criar entrada para a conta (aplica no saldo da conta)
+  const entry = {
+    id: Date.now().toString(),
+    date: todayISO(),
+    desc: `Venda 3D: ${prod.name} x${qty}`,
+    amount: revenue,
+    type: 'entrada',
+    accountId,
+    method: 'venda',
+    category: 'impressora3d'
+  };
+  applyExpenseEffects(entry); // atualiza saldo da conta
+  state.expenses.push(entry);
+
+  // aumentar saldo 3D (reservado)
+  state.impressora3d.saldo = Number(state.impressora3d.saldo || 0) + revenue;
+  state.impressora3d.vendas.push({ id: Date.now().toString(), date: todayISO(), productId: prodId, qty, revenue });
+  state.impressora3d.logs.push({ date: todayISO(), type: 'venda', detail: `${prod.name} x${qty}`, amount: revenue });
+
+  saveState();
+  updateAll();
+  renderImpressora3D();
+}
+
+/* reinvestir: transfere do saldo 3D para acc.guardado e registra em state.investments */
+function imp3dReinvest(){
+  const v = Number(document.getElementById('imp3d-reinvest-amount').value || 0);
+  const accId = document.getElementById('imp3d-reinvest-account').value;
+  if(!v || v <= 0){ alert('Valor inválido'); return; }
+  if(!accId){ alert('Escolha uma conta'); return; }
+  if(state.impressora3d.saldo < v){ if(!confirm('Saldo 3D insuficiente. Deseja prosseguir mesmo assim?')) return; }
+
+  const acc = state.accounts.find(a=>a.id===accId);
+  if(!acc){ alert('Conta inválida'); return; }
+
+  state.impressora3d.saldo = Number(state.impressora3d.saldo || 0) - v;
+  state.impressora3d.reinvested = Number(state.impressora3d.reinvested || 0) + v;
+
+  // colocar no guardado da conta
+  acc.guardado = Number(acc.guardado || 0) + v;
+
+  // registrar investimento (caixinha "reinvest 3D")
+  state.investments.push({
+    id: Date.now().toString(),
+    date: todayISO(),
+    accountId: accId,
+    action: 'reinvest_3d',
+    amount: v,
+    desc: 'Reinvestimento 3D'
+  });
+
+  state.impressora3d.logs.push({ date: todayISO(), type: 'reinvest', detail: `para ${acc.name}`, amount: v });
+
+  saveState();
+  updateAll();
+  renderImpressora3D();
+
+  document.getElementById('imp3d-reinvest-amount').value='';
+}
+
+/* lucro: envia do saldo 3D para conta selecionada (aumenta saldo da conta e cria entrada) */
+function imp3dTakeProfit(){
+  const v = Number(document.getElementById('imp3d-lucro-amount').value || 0);
+  const accId = document.getElementById('imp3d-lucro-account').value;
+  if(!v || v <= 0){ alert('Valor inválido'); return; }
+  if(!accId){ alert('Escolha uma conta'); return; }
+  if(state.impressora3d.saldo < v){ if(!confirm('Saldo 3D insuficiente. Deseja prosseguir mesmo assim?')) return; }
+
+  // decrementar saldo 3D
+  state.impressora3d.saldo = Number(state.impressora3d.saldo || 0) - v;
+  state.impressora3d.lucro = Number(state.impressora3d.lucro || 0) + v;
+
+  // criar entrada na conta (aplica efeito na conta)
+  const entry = {
+    id: Date.now().toString(),
+    date: todayISO(),
+    desc: `Lucro 3D (transferência)`,
+    amount: v,
+    type: 'entrada',
+    accountId: accId,
+    method: 'lucro_3d',
+    category: 'impressora3d'
+  };
+  applyExpenseEffects(entry); // atualiza saldo da conta
+  state.expenses.push(entry);
+
+  state.impressora3d.logs.push({ date: todayISO(), type: 'lucro', detail: `para ${accId}`, amount: v });
+
+  saveState();
+  updateAll();
+  renderImpressora3D();
+
+  document.getElementById('imp3d-lucro-amount').value='';
 }
 
 /* backup: exportar/importar JSON */
@@ -752,6 +1046,8 @@ function handleBackupImport(e){
 
 /* init */
 document.addEventListener('DOMContentLoaded', ()=>{
+
+  /* abas (mantém comportamento original) */
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -804,13 +1100,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
   }
 
+  /* Start month buttons (virada e salario) */
   const applyBtn = document.getElementById('apply-start-month');
-  const applySalaryBtn = document.getElementById('apply-start-salary'); // novo
+  const applySalaryBtn = document.getElementById('apply-start-salary');
   const clearBtn = document.getElementById('clear-start-month');
   if(applyBtn) applyBtn.addEventListener('click', applyStartMonthConfig);
-  if(applySalaryBtn) applySalaryBtn.addEventListener('click', applyStartSalary); // liga o botão novo
+  if(applySalaryBtn) applySalaryBtn.addEventListener('click', applyStartSalary);
   if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
 
+  /* Log filters */
   const logFilter = document.getElementById('log-account-filter');
   const logOnlyMonth = document.getElementById('log-show-only-month');
   if(logFilter) logFilter.addEventListener('change', renderLogTable);
@@ -819,6 +1117,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const includeToggle = document.getElementById('include-start-entrada');
   if(includeToggle) includeToggle.addEventListener('change', ()=>{ renderEntradaPie(); });
 
+  /* Save / reset */
   const saveBtn = document.getElementById('save-btn');
   const resetBtn = document.getElementById('reset-btn');
   if(saveBtn) saveBtn.addEventListener('click', ()=>{
@@ -834,13 +1133,36 @@ document.addEventListener('DOMContentLoaded', ()=>{
     location.reload();
   });
 
+  /* Backup buttons */
   const backupExportBtn = document.getElementById('backup-export');
   const backupImportInput = document.getElementById('backup-import-input');
   if(backupExportBtn) backupExportBtn.addEventListener('click', exportBackup);
   if(backupImportInput) backupImportInput.addEventListener('change', handleBackupImport);
 
+  /* Invest box create */
   const boxCreateBtn = document.getElementById('box-create');
   if(boxCreateBtn) boxCreateBtn.addEventListener('click', handleCreateBox);
+
+  /* Impressora3D listeners */
+  const imp3dExpBtn = document.getElementById('imp3d-exp-submit');
+  if(imp3dExpBtn) imp3dExpBtn.addEventListener('click', registerImp3DExpense);
+
+  const imp3dProdAdd = document.getElementById('imp3d-prod-add');
+  if(imp3dProdAdd) imp3dProdAdd.addEventListener('click', addImp3DProduct);
+
+  const imp3dReinvBtn = document.getElementById('imp3d-reinvest-btn');
+  if(imp3dReinvBtn) imp3dReinvBtn.addEventListener('click', imp3dReinvest);
+
+  const imp3dLucroBtn = document.getElementById('imp3d-lucro-btn');
+  if(imp3dLucroBtn) imp3dLucroBtn.addEventListener('click', imp3dTakeProfit);
+
+  /* Backup import (top) */
+  const backupImportTop = document.getElementById('backup-import-input');
+  if(backupImportTop) backupImportTop.addEventListener('change', handleBackupImport);
+
+  // populate selects for 3D
+  populateAccountSelects();
+  renderImpressora3D();
 });
 
 function updateAll(){
@@ -855,4 +1177,5 @@ function updateAll(){
   renderEntradaPie();
   saveState();
   renderLogTable();
+  renderImpressora3D();
 }
