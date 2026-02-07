@@ -632,60 +632,94 @@ function handleExpenseSubmit(e){
 }
 
 /* início do mês */
-function applyStartMonthConfig(){
+function applySalary(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
-  const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
 
+  if(!entrada || entrada <= 0){
+    if(!confirm('Entrada inicial está vazia ou zero. Deseja continuar sem aplicar salário?')) return;
+  }
+
+  const currentMonth = getActiveMonth();
+
+  // Atualiza totals.entrada e registra startEntry (mantendo histórico, sem duplicar)
+  state.totals.entrada = entrada;
+  const itau = state.accounts.find(a => a.name.toLowerCase().includes('itau'));
+  if(itau && entrada > 0){
+    state.startEntries = (state.startEntries || []).filter(se => !(se.month === currentMonth && se.accountId === itau.id));
+    state.startEntries.push({ month: currentMonth, accountId: itau.id, amount: entrada });
+    itau.saldo = Number(itau.saldo || 0) + entrada; // SOMA, não sobrescreve
+  }
+
+  // Exigir/usar VR informado para atualizar CAJU (se houver)
+  const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
+  if(caju){
+    if(isNaN(vr) || vr === 0){
+      if(!confirm('Valor de VR (Caju) está vazio/zero. Deseja continuar sem atualizar o VR?')) {
+        // se usuário cancelar, não aplicamos salário
+        return;
+      }
+    } else {
+      state.totals.vr_total = vr;
+      caju.saldo = Number(vr || 0); // sobrescreve o saldo do Caju com o valor do input
+    }
+  }
+
+  saveState();
+  updateAll();
+  alert(`Entrada aplicada: ${money(entrada)}\nVR (Caju) definido: ${money(vr)}`);
+}
+
+/**
+ * Aplica apenas o cartão: fecha a fatura do mês ANTERIOR e atualiza o crédito global
+ * - Fecha a fatura anterior calculando o que sobrou do crédito e adiciona ao Nubank.
+ * - Atualiza state.totals.credito_total para o valor do input (novo limite).
+ * - Registra em state.meta.lastCreditClosed para evitar fechar duas vezes.
+ */
+function applyCard(){
+  const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
+  const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const currentMonth = getActiveMonth();
   const prevMonth = computeMonthFromOffset(state.meta.activeOffset - 1);
 
-  /* =========================================
-     1) FECHAMENTO DO CRÉDITO DO MÊS ANTERIOR
-     ========================================= */
+  // evitar fechar a mesma fatura duas vezes
+  state.meta.lastCreditClosed = state.meta.lastCreditClosed || null;
+  if(state.meta.lastCreditClosed === prevMonth){
+    alert(`Fatura de ${prevMonth} já foi fechada.`);
+    return;
+  }
 
+  // 1) FECHAMENTO DO CRÉDITO DO MÊS ANTERIOR (exclui gastos de crédito no CAJU)
   const prevCreditTotal = Number(state.totals.credito_total || 0);
+  const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
+  const cajuId = caju ? caju.id : null;
 
   let creditUsedPrevMonth = 0;
   state.expenses
-    .filter(e =>
-      billingMonthOf(e.date) === prevMonth &&
-      e.type === 'credito'
-    )
-    .forEach(e => {
-      creditUsedPrevMonth += Number(e.amount || 0);
-    });
+    .filter(e => billingMonthOf(e.date) === prevMonth && e.type === 'credito' && e.accountId !== cajuId)
+    .forEach(e => { creditUsedPrevMonth += Number(e.amount || 0); });
 
   const creditBalance = prevCreditTotal - creditUsedPrevMonth;
 
-  /* joga a diferença (positiva ou negativa) no Nubank */
-  const nubank = state.accounts.find(a =>
-    a.name.toLowerCase().includes('nubank')
-  );
+  // joga diferença no Nubank
+  const nubank = state.accounts.find(a => a.name.toLowerCase().includes('nubank'));
   if(nubank && creditBalance !== 0){
     nubank.saldo = Number(nubank.saldo || 0) + creditBalance;
   }
 
-  /* =========================================
-     2) ATUALIZA CRÉDITO GLOBAL (SUBSTITUI)
-     ========================================= */
+  // marca mês como fechado (para não fechar duas vezes)
+  state.meta.lastCreditClosed = prevMonth;
+
+  // 2) ATUALIZA O CRÉDITO GLOBAL (substitui pelo valor informado — você só atualiza no dia da fatura)
   state.totals.credito_total = newGlobalCredit;
 
-  /* =========================================
-     3) VR → CAJU (SOBRESCREVE)
-     ========================================= */
-  state.totals.vr_total = vr;
-  const caju = state.accounts.find(a =>
-    a.name.toLowerCase().includes('caju') ||
-    a.name.toLowerCase().includes('vr')
-  );
-  if(caju){
+  // 3) (opcional) atualizar VR/caju com o valor informado se quiser garantir consistência
+  if(caju && !isNaN(vr) && vr > 0){
+    state.totals.vr_total = vr;
     caju.saldo = Number(vr || 0);
   }
 
-  /* =========================================
-     4) CRÉDITO POR CONTA (INPUTS)
-     ========================================= */
+  // 4) também atualiza créditos por conta (inputs)
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits){
     state.accounts.forEach((acc, idx) => {
@@ -696,34 +730,24 @@ function applyStartMonthConfig(){
     });
   }
 
-  /* =========================================
-     5) ENTRADA DO MÊS → ITAU (SOMA)
-     ========================================= */
-  state.totals.entrada = entrada;
-  const itau = state.accounts.find(a =>
-    a.name.toLowerCase().includes('itau')
-  );
-  if(itau && entrada > 0){
-    state.startEntries = (state.startEntries || []).filter(
-      se => !(se.month === currentMonth && se.accountId === itau.id)
-    );
-    state.startEntries.push({
-      month: currentMonth,
-      accountId: itau.id,
-      amount: entrada
-    });
-
-    itau.saldo = Number(itau.saldo || 0) + entrada;
-  }
-
   saveState();
   updateAll();
-
-  alert(
-    `Início do mês aplicado.\n` +
-    `Fechamento do crédito anterior: ${money(creditBalance)}`
-  );
+  alert(`Fatura de ${prevMonth} fechada.\nDiferença (adicionada a Nubank): ${money(creditBalance)}\nCrédito global atualizado: ${money(newGlobalCredit)}`);
 }
+
+/**
+ * Fecha o mês lógico: avança state.meta.activeOffset em +1 (mantendo histórico).
+ * Não remove históricos — apenas muda o mês ativo para próxima fatura (24→23 logic).
+ */
+function closeMonth(){
+  if(!confirm('Tem certeza que deseja fechar o mês e avançar o índice do mês lógico?')) return;
+  state.meta.activeOffset = Number(state.meta.activeOffset || 0) + 1;
+  saveState();
+  updateAll();
+  alert('Mês fechado. Índice do mês avançado.');
+}
+
+/* manter a função de limpar os campos (já existia) */
 function clearStartMonthFields(){
   const vrInput = document.getElementById('inicio-vr-total');
   const entInput = document.getElementById('inicio-entrada-total');
@@ -734,6 +758,27 @@ function clearStartMonthFields(){
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
 }
+
+/* ---------- Bind dos novos botões no DOMContentLoaded ---------- */
+/* Substitua/adapte a parte do seu init onde ligava 'apply-start-month' e 'clear-start-month' */
+document.addEventListener('DOMContentLoaded', ()=>{
+
+  // ... seu código init já existente (mantenha-o) ...
+
+  // ligar os novos botões (coloque depois da parte em que o DOM é inicializado)
+  const applySalaryBtn = document.getElementById('apply-salary');
+  const applyCardBtn = document.getElementById('apply-card');
+  const closeMonthBtn = document.getElementById('close-month');
+  const clearBtn = document.getElementById('clear-start-month');
+
+  if(applySalaryBtn) applySalaryBtn.addEventListener('click', applySalary);
+  if(applyCardBtn) applyCardBtn.addEventListener('click', applyCard);
+  if(closeMonthBtn) closeMonthBtn.addEventListener('click', closeMonth);
+  if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
+
+  // ... restante do seu código init ...
+});
+
 
 /* backup: exportar/importar JSON */
 function exportBackup(){
