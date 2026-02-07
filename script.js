@@ -1,4 +1,4 @@
-/* ---------- INÍCIO DO ARQUIVO (com Impressora3D e todas as funcionalidades pedidas) ---------- */
+/* ---------- INÍCIO DO ARQUIVO (com Impressora3D e cálculos reversos) ---------- */
 
 const STORAGE_KEY = "controleExcel_v10";
 
@@ -8,7 +8,6 @@ const DEFAULT = {
     { id: "sicoob", name: "Sicoob", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "itau", name: "Itau", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "caju", name: "Caju", saldo: 0, guardado: 0, credit_total: 0 },
-    // contas para Impressora3D
     { id: "imp3d", name: "imp3d", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 }
   ],
@@ -18,7 +17,7 @@ const DEFAULT = {
   startEntries: [],
   investBoxes: [],
   filaments: [],      // {id,color,type,weight,price}
-  products: [],       // {id,name,hours,fil_g,price,desc}
+  products: [],       // {id,name,hours,fil_g,price,energy_h,pack,desc}
   impSales: [],       // {id,date,productId,filamentId,accountId,qty,amount}
   impLosses: [],      // {id,date,filamentId,grams,cost,reason}
   meta: { baseMonth: null, activeOffset: 0, lastCreditClosed: null }
@@ -26,12 +25,12 @@ const DEFAULT = {
 
 let state = loadState();
 
-/* helpers básicos */
+/* ---------- helpers ---------- */
 function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 const sum = (arr, fn)=> arr.reduce((s,x)=> s + (Number(fn?fn(x):x)||0), 0);
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 
-/* "mês lógico" de fatura: 24→23 */
+/* billingMonthOf (24->23 logic) */
 function billingMonthOf(d){
   if(!d) return '';
   const parts = d.split('-').map(Number);
@@ -48,6 +47,7 @@ function billingMonthOf(d){
   return `${y}-${String(m).padStart(2,'0')}`;
 }
 
+/* load / save */
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -68,12 +68,11 @@ function loadState(){
       if(!s.products) s.products = [];
       if(!s.impSales) s.impSales = [];
       if(!s.impLosses) s.impLosses = [];
-      // garantir contas imp3d / shopee em states antigos
+      // garantir contas imp3d / shopee em estados antigos
       const hasImp3d = (s.accounts || []).some(a=>a.id === 'imp3d');
       const hasShopee = (s.accounts || []).some(a=>a.id === 'shopee');
       if(!hasImp3d) s.accounts.push({ id: "imp3d", name: "imp3d", saldo: 0, guardado: 0, credit_total: 0 });
       if(!hasShopee) s.accounts.push({ id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 });
-      // ancora o índice no ciclo da fatura atual (24→23)
       s.meta.baseMonth = billingMonthOf(todayISO());
       s.meta.lastCreditClosed = s.meta.lastCreditClosed || null;
       return s;
@@ -93,7 +92,7 @@ function computeMonthFromOffset(offset){
 }
 function getActiveMonth(){ return computeMonthFromOffset(state.meta.activeOffset); }
 
-/* agregações por "mês de fatura" */
+/* monthly sums */
 function monthlySumsByAccount(month){
   const map = {};
   state.accounts.forEach(a => map[a.id] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 });
@@ -108,11 +107,11 @@ function monthlySumsByAccount(month){
   return map;
 }
 
+/* derived */
 function calcDerived(month){
   const sums = monthlySumsByAccount(month);
   const total_gasto_credito = sum(Object.values(sums), x => x.gasto_credito);
   const available_credit_total = Number(state.totals.credito_total || 0) - total_gasto_credito;
-
   const total_gasto_vr = sum(Object.values(sums), x => x.gasto_vr);
   const available_vr = Number(state.totals.vr_total||0) - total_gasto_vr;
   const guardado_total = sum(state.accounts, a => a.guardado || 0);
@@ -124,7 +123,7 @@ function calcDerived(month){
   return { sumsByAccount: sums, total_gasto_credito, available_credit_total, available_vr, guardado_total, saldo_display, credito_debito };
 }
 
-/* ---------- render ---------- */
+/* ---------- render (charts, tables) ---------- */
 let gastoChart=null, categoryChart=null, monthlyChart=null, entradaChart=null;
 
 function renderAccountsTable(){
@@ -150,7 +149,6 @@ function renderAccountsTable(){
     tbody.appendChild(tr);
   });
 
-  // atualizar resumo conta imp3d se existir
   const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
   const imp3dBalanceEl = document.getElementById('imp3d-acc-balance');
   if(imp3dBalanceEl) imp3dBalanceEl.textContent = imp3dAcc ? money(imp3dAcc.saldo) : '—';
@@ -158,19 +156,13 @@ function renderAccountsTable(){
 
 function renderYellow(){
   const d = calcDerived(getActiveMonth());
-  const elAvailCredit = document.getElementById('avail-credit');
-  const elAvailVr = document.getElementById('avail-vr');
-  const elAvailSaldo = document.getElementById('avail-saldo');
-  const elAvailGuardado = document.getElementById('avail-guardado');
-  const elCd = document.getElementById('credit-debit-small');
-  if(elAvailCredit) elAvailCredit.textContent = money(d.available_credit_total);
-  if(elAvailVr) elAvailVr.textContent = money(d.available_vr);
-  if(elAvailSaldo) elAvailSaldo.textContent = money(d.saldo_display);
-  if(elAvailGuardado) elAvailGuardado.textContent = money(d.guardado_total);
-  if(elCd) elCd.textContent = money(d.credito_debito);
+  document.getElementById('avail-credit').textContent = money(d.available_credit_total);
+  document.getElementById('avail-vr').textContent = money(d.available_vr);
+  document.getElementById('avail-saldo').textContent = money(d.saldo_display);
+  document.getElementById('avail-guardado').textContent = money(d.guardado_total);
+  document.getElementById('credit-debit-small').textContent = money(d.credito_debito);
 }
 
-/* charts */
 function baseChartOptions(){
   return {
     responsive:true,
@@ -193,11 +185,7 @@ function renderGastoCreditoChart(){
   const labels = state.accounts.map(a=>a.name);
   const data = state.accounts.map(a => (sums[a.id] ? sums[a.id].gasto_credito : 0));
   if(gastoChart) gastoChart.destroy();
-  gastoChart = new Chart(ctx,{
-    type:'bar',
-    data:{ labels,datasets:[{label:'Gasto crédito',data}]},
-    options:baseChartOptions()
-  });
+  gastoChart = new Chart(ctx,{ type:'bar', data:{ labels,datasets:[{label:'Gasto crédito',data}]}, options:baseChartOptions() });
 }
 
 function renderCategoryPie(){
@@ -218,12 +206,7 @@ function renderCategoryPie(){
   categoryChart = new Chart(ctx,{
     type:'pie',
     data:{ labels,datasets:[{data}]},
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      aspectRatio:1.4,
-      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } }
-    }
+    options:{ responsive:true, maintainAspectRatio:false, aspectRatio:1.4, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } } }
   });
 }
 
@@ -245,20 +228,7 @@ function renderMonthlyLine(){
   const arr = monthlyTotalsLastN(6);
   const labels = arr.map(x=>x.month), data = arr.map(x=>x.total);
   if(monthlyChart) monthlyChart.destroy();
-  monthlyChart = new Chart(ctx,{
-    type:'line',
-    data:{ labels,datasets:[{label:'Gasto total',data,fill:false,tension:0.25}]},
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      aspectRatio:1.8,
-      plugins:{ legend:{ display:false } },
-      scales:{
-        x:{ ticks:{ font:{ size:9 } }, grid:{ display:false } },
-        y:{ ticks:{ font:{ size:9 } }, grid:{ color:'rgba(148,163,184,0.15)' } }
-      }
-    }
-  });
+  monthlyChart = new Chart(ctx,{ type:'line', data:{ labels,datasets:[{label:'Gasto total',data,fill:false,tension:0.25}]}, options:{ responsive:true, maintainAspectRatio:false, aspectRatio:1.8, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ font:{ size:9 } }, grid:{ display:false } }, y:{ ticks:{ font:{ size:9 } }, grid:{ color:'rgba(148,163,184,0.15)' } } } } });
 }
 
 /* entradas */
@@ -288,19 +258,10 @@ function renderEntradaPie(){
   const labels = Object.keys(map).map(id => (state.accounts.find(a=>a.id===id) || {name:id}).name);
   const data = Object.keys(map).map(k => map[k]);
   if(entradaChart) entradaChart.destroy();
-  entradaChart = new Chart(ctx,{
-    type:'pie',
-    data:{ labels,datasets:[{data}]},
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      aspectRatio:1.4,
-      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } }
-    }
-  });
+  entradaChart = new Chart(ctx,{ type:'pie', data:{ labels,datasets:[{data}]}, options:{ responsive:true, maintainAspectRatio:false, aspectRatio:1.4, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } } } });
 }
 
-/* selects & editable */
+/* ---------- selects & editable ---------- */
 function populateAccountSelects(){
   const sel = document.getElementById('exp-account');
   const selLog = document.getElementById('log-account-filter');
@@ -378,7 +339,7 @@ function renderEditableAccounts(){
   });
 }
 
-/* investimentos: resumo + log + caixinhas */
+/* investimentos (mantidos) */
 function renderInvestimentos(){
   const list = document.getElementById('invest-list'); 
   if(list){
@@ -396,7 +357,6 @@ function renderInvestimentos(){
   renderInvestLog();
   renderInvestBoxes();
 }
-
 function renderInvestLog(){
   const tbody = document.getElementById('invest-log-body'); 
   if(!tbody) return;
@@ -410,12 +370,11 @@ function renderInvestLog(){
   });
 }
 
-/* caixinhas */
+/* caixinhas (mantidas) */
 function renderInvestBoxes(){
   const container = document.getElementById('invest-boxes');
   if(!container) return;
   container.innerHTML='';
-
   if(!state.investBoxes.length){
     const empty = document.createElement('p');
     empty.className = 'muted';
@@ -423,7 +382,6 @@ function renderInvestBoxes(){
     container.appendChild(empty);
     return;
   }
-
   state.investBoxes.forEach(box=>{
     const card = document.createElement('div');
     card.className = 'box-card';
@@ -456,11 +414,9 @@ function renderInvestBoxes(){
       const box = state.investBoxes.find(b=>b.id===id);
       if(!box) return;
       box.accountId = e.target.value;
-      saveState();
-      updateAll();
+      saveState(); updateAll();
     });
   });
-
   container.querySelectorAll('.box-save').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -478,24 +434,15 @@ function renderInvestBoxes(){
       acc.guardado = Number(acc.guardado||0) + amount;
       box.amount = Number(box.amount||0) + amount;
 
-      const entry = {
-        id: Date.now().toString(),
-        date: todayISO(),
-        accountId: box.accountId,
-        action: 'guardar',
-        amount,
-        desc: box.name ? `[${box.name}] ${box.desc||''}` : (box.desc||'')
-      };
+      const entry = { id: Date.now().toString(), date: todayISO(), accountId: box.accountId, action: 'guardar', amount, desc: box.name ? `[${box.name}] ${box.desc||''}` : (box.desc||'') };
       state.investments.push(entry);
-      saveState();
-      updateAll();
-      input.value='';
-      alert('Valor guardado na caixinha.');
+      saveState(); updateAll();
+      input.value=''; alert('Valor guardado na caixinha.');
     });
   });
 }
 
-/* log */
+/* render log table */
 function renderLogTable(){
   const tbody = document.getElementById('log-body'); 
   if(!tbody) return;
@@ -526,21 +473,16 @@ function renderLogTable(){
   });
 }
 
-/* efeitos dos lançamentos (inclui VR debitando saldo do Caju) */
+/* ---------- despesas/entradas effects ---------- */
 function applyExpenseEffects(exp){
   if(exp.type === 'vr'){
-    const caju = state.accounts.find(a =>
-      a.name.toLowerCase().includes('caju') ||
-      a.name.toLowerCase().includes('vr')
-    );
+    const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
     if(caju){
       exp.accountId = caju.id;
     }
   }
-
   const acc = state.accounts.find(a=>a.id===exp.accountId);
   if(!acc) return;
-
   if(exp.type === 'saldo'){
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
   }
@@ -554,11 +496,9 @@ function applyExpenseEffects(exp){
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
   }
 }
-
 function applyExpenseReverse(exp){
   const acc = state.accounts.find(a=>a.id===exp.accountId);
   if(!acc) return;
-
   if(exp.type === 'saldo'){
     acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
   }
@@ -573,28 +513,14 @@ function applyExpenseReverse(exp){
   }
 }
 
-/* criar caixinha */
+/* ---------- criar caixinha (mantido) ---------- */
 function handleCreateBox(){
   const name = document.getElementById('box-name').value.trim();
   const accountId = document.getElementById('box-account').value;
   const desc = document.getElementById('box-desc').value.trim();
-
-  if(!name){
-    alert('Dê um nome para a caixinha.');
-    return;
-  }
-  if(!accountId){
-    alert('Escolha uma conta para a caixinha.');
-    return;
-  }
-
-  const box = {
-    id: Date.now().toString(),
-    name,
-    accountId,
-    desc,
-    amount: 0
-  };
+  if(!name){ alert('Dê um nome para a caixinha.'); return; }
+  if(!accountId){ alert('Escolha uma conta para a caixinha.'); return; }
+  const box = { id: Date.now().toString(), name, accountId, desc, amount: 0 };
   state.investBoxes.push(box);
   saveState();
   document.getElementById('box-name').value = '';
@@ -602,161 +528,77 @@ function handleCreateBox(){
   updateAll();
 }
 
-/* troca de aba programática */
-function activateTab(tabName){
-  document.querySelectorAll('.tab-btn').forEach(btn=>{
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
-  });
-  document.querySelectorAll('.tab-panel').forEach(panel=>{
-    panel.classList.toggle('active', panel.id === 'tab-' + tabName);
-  });
-}
-
-/* submit gasto/entrada */
-function handleExpenseSubmit(e){
-  e.preventDefault();
-  const date = document.getElementById('exp-date').value || todayISO();
-  const desc = document.getElementById('exp-desc').value.trim() || '';
-  const amount = Number(document.getElementById('exp-amount').value || 0);
-  const type = document.getElementById('exp-type').value;
-  const accountId = document.getElementById('exp-account').value;
-  const method = document.getElementById('exp-method').value.trim() || '';
-  const category = document.getElementById('exp-category').value || 'outros';
-  if(!amount || amount <= 0){ alert('Valor inválido'); return; }
-
-  if(type === 'credito'){
-    const month = getActiveMonth();
-    const sums = monthlySumsByAccount(month);
-    const total_used = sum(Object.values(sums), x => x.gasto_credito);
-    const avail = Number(state.totals.credito_total || 0) - total_used;
-    if(avail < amount){
-      if(!confirm(`Crédito disponível global é ${money(avail)}. Deseja registrar mesmo assim?`)) return;
-    }
-  }
-
-  const newExp = { id: Date.now().toString(), date, desc, amount, type, accountId, method, category };
-  applyExpenseEffects(newExp);
-  if(!Array.isArray(state.expenses)) state.expenses = [];
-  state.expenses.push(newExp);
-  saveState();
-  updateAll();
-
-  document.getElementById('exp-amount').value = '';
-  document.getElementById('exp-desc').value = '';
-  document.getElementById('exp-method').value = '';
-
-  activateTab('dashboard');
-}
-
-/* início do mês */
+/* ---------- inicio do mês (salario / cartao / fechar) ---------- */
 function applySalary(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
-
   if(!entrada || entrada <= 0){
     if(!confirm('Entrada inicial está vazia ou zero. Deseja continuar sem aplicar salário?')) return;
   }
-
   const currentMonth = getActiveMonth();
-
-  // Atualiza totals.entrada e registra startEntry (mantendo histórico, sem duplicar)
   state.totals.entrada = entrada;
   const itau = state.accounts.find(a => a.name.toLowerCase().includes('itau'));
   if(itau && entrada > 0){
     state.startEntries = (state.startEntries || []).filter(se => !(se.month === currentMonth && se.accountId === itau.id));
     state.startEntries.push({ month: currentMonth, accountId: itau.id, amount: entrada });
-    itau.saldo = Number(itau.saldo || 0) + entrada; // SOMA, não sobrescreve
+    itau.saldo = Number(itau.saldo || 0) + entrada; // soma
   }
-
-  // Exigir/usar VR informado para atualizar CAJU (se houver)
   const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   if(caju){
     if(isNaN(vr) || vr === 0){
-      if(!confirm('Valor de VR (Caju) está vazio/zero. Deseja continuar sem atualizar o VR?')) {
-        // se usuário cancelar, não aplicamos salário
-        return;
-      }
+      if(!confirm('Valor de VR (Caju) está vazio/zero. Deseja continuar sem atualizar o VR?')) { return; }
     } else {
       state.totals.vr_total = vr;
-      caju.saldo = Number(vr || 0); // sobrescreve o saldo do Caju com o valor do input
+      caju.saldo = Number(vr || 0);
     }
   }
-
-  saveState();
-  updateAll();
+  saveState(); updateAll();
   alert(`Entrada aplicada: ${money(entrada)}\nVR (Caju) definido: ${money(vr)}`);
 }
 
-/* applyCard - fecha fatura anterior e atualiza crédito global */
 function applyCard(){
   const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
-  const currentMonth = getActiveMonth();
   const prevMonth = computeMonthFromOffset(state.meta.activeOffset - 1);
-
-  // evitar fechar a mesma fatura duas vezes
   state.meta.lastCreditClosed = state.meta.lastCreditClosed || null;
   if(state.meta.lastCreditClosed === prevMonth){
-    alert(`Fatura de ${prevMonth} já foi fechada.`);
-    return;
+    alert(`Fatura de ${prevMonth} já foi fechada.`); return;
   }
-
-  // 1) FECHAMENTO DO CRÉDITO DO MÊS ANTERIOR
   const prevCreditTotal = Number(state.totals.credito_total || 0);
   const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   const cajuId = caju ? caju.id : null;
-
   let creditUsedPrevMonth = 0;
   state.expenses
     .filter(e => billingMonthOf(e.date) === prevMonth && e.type === 'credito' && e.accountId !== cajuId)
     .forEach(e => { creditUsedPrevMonth += Number(e.amount || 0); });
-
   const creditBalance = prevCreditTotal - creditUsedPrevMonth;
-
-  // joga diferença no Nubank
   const nubank = state.accounts.find(a => a.name.toLowerCase().includes('nubank'));
   if(nubank && creditBalance !== 0){
     nubank.saldo = Number(nubank.saldo || 0) + creditBalance;
   }
-
-  // marca mês como fechado (para não fechar duas vezes)
   state.meta.lastCreditClosed = prevMonth;
-
-  // 2) ATUALIZA O CRÉDITO GLOBAL
   state.totals.credito_total = newGlobalCredit;
-
-  // 3) atualizar VR/caju se informado
   if(caju && !isNaN(vr) && vr > 0){
     state.totals.vr_total = vr;
     caju.saldo = Number(vr || 0);
   }
-
-  // 4) também atualiza créditos por conta (inputs)
   const inicioCredits = document.getElementById('inicio-credits');
   if(inicioCredits){
     state.accounts.forEach((acc, idx) => {
       const inp = inicioCredits.querySelector(`input[data-acc="${idx}"]`);
-      if(inp){
-        acc.credit_total = Number(inp.value || 0);
-      }
+      if(inp) acc.credit_total = Number(inp.value || 0);
     });
   }
-
-  saveState();
-  updateAll();
+  saveState(); updateAll();
   alert(`Fatura de ${prevMonth} fechada.\nDiferença (adicionada a Nubank): ${money(creditBalance)}\nCrédito global atualizado: ${money(newGlobalCredit)}`);
 }
 
-/* Fecha o mês lógico */
 function closeMonth(){
   if(!confirm('Tem certeza que deseja fechar o mês e avançar o índice do mês lógico?')) return;
   state.meta.activeOffset = Number(state.meta.activeOffset || 0) + 1;
-  saveState();
-  updateAll();
-  alert('Mês fechado. Índice do mês avançado.');
+  saveState(); updateAll(); alert('Mês fechado. Índice do mês avançado.');
 }
 
-/* limpar campos início mês */
 function clearStartMonthFields(){
   const vrInput = document.getElementById('inicio-vr-total');
   const entInput = document.getElementById('inicio-entrada-total');
@@ -776,25 +618,17 @@ function transferShopeeToNubank(amount){
   const nb = state.accounts.find(a=>a.id==='nubank');
   if(!sh || !nb) return alert('Contas Shopee ou Nubank não encontradas.');
   if(Number(sh.saldo || 0) < amount){
-    if(!confirm('Saldo Shopee insuficiente. Deseja permitir saldo negativo?')) {
-      return;
-    }
+    if(!confirm('Saldo Shopee insuficiente. Deseja permitir saldo negativo?')) { return; }
   }
   sh.saldo = Number(sh.saldo || 0) - amount;
   nb.saldo = Number(nb.saldo || 0) + amount;
-
-  // criar entradas para registro: retirada de Shopee (saldo) e entrada em Nubank
   const out = { id: 'imp3d-tr-out-' + Date.now().toString(), date: todayISO(), desc:`Transfer to Nubank`, amount, type:'saldo', accountId:'shopee', category:'transfer_shopee', method:'transfer' };
   const inent = { id: 'imp3d-tr-in-' + Date.now().toString(), date: todayISO(), desc:`Transfer from Shopee`, amount, type:'entrada', accountId:'nubank', category:'transfer_shopee', method:'transfer' };
-  state.expenses.push(out);
-  state.expenses.push(inent);
-
-  saveState();
-  updateAll();
-  alert(`Transferido ${money(amount)} de Shopee para Nubank.`);
+  state.expenses.push(out); state.expenses.push(inent);
+  saveState(); updateAll(); alert(`Transferido ${money(amount)} de Shopee para Nubank.`);
 }
 
-/* ---------- BACKUP ---------- */
+/* ---------- backup ---------- */
 function exportBackup(){
   try{
     const dataStr = JSON.stringify(state);
@@ -805,24 +639,13 @@ function exportBackup(){
     a.href = url;
     a.download = `controle-gastos-backup-${ts}.json`;
     document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }catch(e){
-    console.error(e);
-    alert('Não foi possível gerar o backup.');
-  }
+    a.click(); a.remove(); URL.revokeObjectURL(url);
+  }catch(e){ console.error(e); alert('Não foi possível gerar o backup.'); }
 }
 function handleBackupImport(e){
   const file = e.target.files[0];
-  if(!file){
-    e.target.value='';
-    return;
-  }
-  if(!confirm('Importar backup e substituir TODOS os dados atuais?')){
-    e.target.value='';
-    return;
-  }
+  if(!file){ e.target.value=''; return; }
+  if(!confirm('Importar backup e substituir TODOS os dados atuais?')){ e.target.value=''; return; }
   const reader = new FileReader();
   reader.onload = ev =>{
     try{
@@ -831,19 +654,14 @@ function handleBackupImport(e){
       state = loadState();
       alert('Backup importado com sucesso.');
       location.reload();
-    }catch(err){
-      console.error(err);
-      alert('Arquivo de backup inválido ou corrompido.');
-    }finally{
-      e.target.value='';
-    }
+    }catch(err){ console.error(err); alert('Arquivo de backup inválido ou corrompido.'); }finally{ e.target.value=''; }
   };
   reader.readAsText(file);
 }
 
-/* ---------- IMPRESSORA3D: UI + lógica ---------- */
+/* ---------- IMPRESSORA3D ---------- */
 
-/* Render lista de filamentos */
+/* Render filamentos */
 function renderFilaments(){
   const container = document.getElementById('filaments-list');
   if(!container) return;
@@ -876,7 +694,6 @@ function renderFilaments(){
     container.appendChild(el);
   });
 
-  // events
   container.querySelectorAll('.fil-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -891,18 +708,11 @@ function renderFilaments(){
       const id = e.target.dataset.id;
       const f = state.filaments.find(x=>x.id===id);
       if(!f) return;
-      const newColor = prompt('Cor:', f.color);
-      if(newColor === null) return;
-      const newType = prompt('Tipo:', f.type);
-      if(newType === null) return;
-      const newWeight = prompt('Peso (g):', f.weight);
-      if(newWeight === null) return;
-      const newPrice = prompt('Preço (R$):', f.price || '0');
-      if(newPrice === null) return;
-      f.color = newColor.trim();
-      f.type = newType.trim();
-      f.weight = Number(newWeight || 0);
-      f.price = Number(newPrice || 0);
+      const newColor = prompt('Cor:', f.color); if(newColor === null) return;
+      const newType = prompt('Tipo:', f.type); if(newType === null) return;
+      const newWeight = prompt('Peso (g):', f.weight); if(newWeight === null) return;
+      const newPrice = prompt('Preço (R$):', f.price || '0'); if(newPrice === null) return;
+      f.color = newColor.trim(); f.type = newType.trim(); f.weight = Number(newWeight || 0); f.price = Number(newPrice || 0);
       saveState(); updateAll();
     });
   });
@@ -920,43 +730,18 @@ function renderFilaments(){
       if(costStr === null) return;
       const cost = Number(costStr || 0);
       const reason = prompt('Motivo (opcional):', 'Perda / falha de impressão') || '';
-
       if(Number(f.weight || 0) < grams){
         if(!confirm(`Filamento tem ${Number(f.weight||0).toFixed(2)} g, você quer permitir ficar negativo?`)) return;
       }
-
-      // subtrai filamento
       f.weight = Number(f.weight || 0) - grams;
-
-      // registra perda em impLosses
-      const loss = {
-        id: 'loss-' + Date.now().toString(),
-        date: todayISO(),
-        filamentId: id,
-        grams: Number(grams),
-        cost: Number(cost),
-        reason: reason
-      };
+      const loss = { id: 'loss-' + Date.now().toString(), date: todayISO(), filamentId: id, grams: Number(grams), cost: Number(cost), reason: reason };
       state.impLosses.push(loss);
-
-      // registra despesa no log principal (conta imp3d)
       const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
       const accId = imp3dAcc ? imp3dAcc.id : (state.accounts[0] && state.accounts[0].id);
-      const exp = {
-        id: 'imp3d-loss-exp-' + Date.now().toString(),
-        date: todayISO(),
-        desc: `Retirada filamento ${f.color} (${reason||'perda'})`,
-        amount: Number(cost || 0),
-        type: 'saldo',
-        accountId: accId,
-        method: 'retirada filamento',
-        category: 'filamento_perda'
-      };
+      const exp = { id: 'imp3d-loss-exp-' + Date.now().toString(), date: todayISO(), desc: `Retirada filamento ${f.color} (${reason||'perda'})`, amount: Number(cost || 0), type: 'saldo', accountId: accId, method: 'retirada filamento', category: 'filamento_perda' };
       applyExpenseEffects(exp);
       state.expenses.push(exp);
-
-      saveState();
-      updateAll();
+      saveState(); updateAll();
       alert(`Retirada registrada: ${grams} g / ${money(cost)}.`);
     });
   });
@@ -975,21 +760,33 @@ function handleAddFilament(){
   const f = { id: Date.now().toString(), color, type, weight: Number(weight), price: Number(price||0) };
   state.filaments.push(f);
   saveState();
-  document.getElementById('fil-color').value='';
-  document.getElementById('fil-type').value='';
-  document.getElementById('fil-weight').value='';
-  document.getElementById('fil-price').value='';
+  document.getElementById('fil-color').value=''; document.getElementById('fil-type').value=''; document.getElementById('fil-weight').value=''; document.getElementById('fil-price').value='';
   updateAll();
 }
 
-/* Render produtos list */
+/* ---------- Produtos: cadastro + render ---------- */
+function handleAddProduct(){
+  const name = document.getElementById('prod-name').value.trim();
+  const hours = Number(document.getElementById('prod-hours').value || 0);
+  const fil_g = Number(document.getElementById('prod-fil-g').value || 0);
+  const energy_h = Number(document.getElementById('prod-energy-h').value || 0);
+  const pack = Number(document.getElementById('prod-pack').value || 0);
+  const price = Number(document.getElementById('prod-price').value || 0);
+  const desc = document.getElementById('prod-desc').value.trim();
+  if(!name || fil_g <= 0 || price <= 0){ alert('Nome, filamento por unidade (g) e preço são obrigatórios e devem ser válidos.'); return; }
+  const p = { id: Date.now().toString(), name, hours, fil_g: Number(fil_g), price: Number(price), energy_h: Number(energy_h), pack: Number(pack), desc };
+  state.products.push(p);
+  saveState();
+  document.getElementById('prod-name').value=''; document.getElementById('prod-hours').value=''; document.getElementById('prod-fil-g').value=''; document.getElementById('prod-price').value=''; document.getElementById('prod-desc').value=''; document.getElementById('prod-energy-h').value=''; document.getElementById('prod-pack').value='';
+  updateAll();
+}
+
 function renderProducts(){
   const container = document.getElementById('prod-list');
   if(!container) return;
   container.innerHTML='';
   if(!state.products.length){
-    const p = document.createElement('p'); p.className='muted'; p.textContent = 'Nenhum produto cadastrado.';
-    container.appendChild(p);
+    const p = document.createElement('p'); p.className='muted'; p.textContent = 'Nenhum produto cadastrado.'; container.appendChild(p);
     if(document.getElementById('imp3d-count-prod')) document.getElementById('imp3d-count-prod').textContent = '0';
     return;
   }
@@ -1002,7 +799,8 @@ function renderProducts(){
     card.innerHTML = `
       <div>
         <div style="font-weight:700">${prod.name}</div>
-        <div style="font-size:0.85rem;color:var(--muted);">Horas: ${prod.hours} — Filamento por unidade: ${Number(prod.fil_g).toFixed(2)} g</div>
+        <div style="font-size:0.85rem;color:var(--muted);">Horas: ${prod.hours} — Filamento: ${Number(prod.fil_g).toFixed(2)} g</div>
+        <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">Energia: ${money(prod.energy_h||0)}/h — Embalagem: ${money(prod.pack||0)}</div>
         <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc||''}</div>
       </div>
       <div style="text-align:right">
@@ -1016,7 +814,6 @@ function renderProducts(){
     container.appendChild(card);
   });
 
-  // events
   container.querySelectorAll('.prod-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1036,13 +833,50 @@ function renderProducts(){
   if(document.getElementById('imp3d-count-prod')) document.getElementById('imp3d-count-prod').textContent = String(state.products.length);
 }
 
-/* abre formulário de venda inline */
+/* ---------- Funções de cálculo (reverso) ---------- */
+
+/*
+ Shopee fees:
+ - taxa fixa (ex: R$4,00)
+ - taxa porcentual (ex: 20%)
+ Given finalPrice P:
+ taxa = taxaFixa + taxaPct * P
+ net = P - taxa
+ custoTotal = material + energia + embalagem
+ lucro = net - custoTotal
+*/
+const DEFAULT_SHOPEE_FIXED = 4.00;
+const DEFAULT_SHOPEE_PCT = 0.20;
+
+function calcCostsForProductAndFilament(prod, filament, qty=1, shoFeeFixed=DEFAULT_SHOPEE_FIXED, shoFeePct=DEFAULT_SHOPEE_PCT){
+  // price per gram for filament (if available)
+  let pricePerGram = 0;
+  if(filament && filament.weight && filament.price){
+    pricePerGram = Number(filament.price || 0) / Number(filament.weight || 1);
+  }
+  const materialPerUnit = Number(prod.fil_g || 0);
+  const materialCostUnit = materialPerUnit * pricePerGram;
+  const energyCostUnit = Number(prod.hours || 0) * Number(prod.energy_h || 0);
+  const packUnit = Number(prod.pack || 0);
+  const custoUnit = Number(materialCostUnit || 0) + Number(energyCostUnit || 0) + Number(packUnit || 0);
+  // return object with unit costs
+  return {
+    materialCostUnit,
+    energyCostUnit,
+    packUnit,
+    custoUnit,
+    pricePerGram
+  };
+}
+
+/* ---------- venda (form inline) ---------- */
 function openSellFormForProduct(productId, anchorBtn){
   const existing = document.getElementById('imp3d-sell-form-'+productId);
   if(existing){ existing.remove(); return; }
 
   const prod = state.products.find(p=>p.id===productId);
   if(!prod) return;
+
   const form = document.createElement('div');
   form.id = 'imp3d-sell-form-'+productId;
   form.style.marginTop = '8px';
@@ -1068,12 +902,28 @@ function openSellFormForProduct(productId, anchorBtn){
         <label style="font-size:0.85rem;color:var(--muted)">Preço (R$)</label>
         <input id="sell-price-${productId}" type="number" step="0.01" value="${prod.price}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
       </div>
+
+      <div style="width:220px;min-width:160px">
+        <label style="font-size:0.85rem;color:var(--muted)">Taxa fixa Shopee (R$)</label>
+        <input id="sell-sh-fixed-${productId}" type="number" step="0.01" value="${DEFAULT_SHOPEE_FIXED}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
+      </div>
+      <div style="width:160px">
+        <label style="font-size:0.85rem;color:var(--muted)">Taxa % Shopee</label>
+        <input id="sell-sh-pct-${productId}" type="number" step="0.01" value="${DEFAULT_SHOPEE_PCT*100}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>%
+      </div>
+
+      <div style="width:100%; margin-top:6px">
+        <div id="sell-breakdown-${productId}" style="font-size:0.9rem;color:var(--muted)"></div>
+      </div>
+
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <button id="sell-confirm-${productId}" class="btn-primary">Confirmar venda</button>
+        <button id="sell-calc-${productId}" class="btn ghost">Atualizar cálculo</button>
         <button id="sell-cancel-${productId}" class="btn ghost">Cancelar</button>
       </div>
     </div>
   `;
+
   const card = anchorBtn.closest('.box-card');
   card.parentNode.insertBefore(form, card.nextSibling);
 
@@ -1101,25 +951,69 @@ function openSellFormForProduct(productId, anchorBtn){
   });
   if(state.accounts.some(a=>a.id==='shopee')) accSel.value = 'shopee';
 
+  // calcular e mostrar breakdown
+  function updateSellBreakdown(){
+    const qty = Number(document.getElementById(`sell-qty-${productId}`).value || 0);
+    const price = Number(document.getElementById(`sell-price-${productId}`).value || 0);
+    const fixed = Number(document.getElementById(`sell-sh-fixed-${productId}`).value || 0);
+    const pct = Number(document.getElementById(`sell-sh-pct-${productId}`).value || 0)/100;
+    const filId = document.getElementById(`sell-fil-${productId}`).value;
+    const filament = state.filaments.find(f=>f.id===filId);
+    const costs = calcCostsForProductAndFilament(prod, filament, qty, fixed, pct);
+    const totalPrice = Number(price) * Number(qty);
+    const shFee = Number(fixed) + Number(pct) * Number(price); // fee per unit = fixed + pct*price
+    const shFeeTotal = Number(shFee) * Number(qty);
+    const netUnit = Number(price) - Number(shFee);
+    const netTotal = Number(netUnit) * Number(qty);
+    const custoUnit = Number(costs.custoUnit || 0);
+    const custoTotal = custoUnit * Number(qty);
+    const lucroUnit = netUnit - custoUnit;
+    const lucroTotal = lucroUnit * Number(qty);
+
+    const breakdownEl = document.getElementById(`sell-breakdown-${productId}`);
+    breakdownEl.innerHTML = `
+      <div><strong>Preço unitário:</strong> ${money(price)}</div>
+      <div><strong>Taxa Shopee (unit):</strong> ${money(shFee)} (fixa ${money(fixed)} + ${ (pct*100).toFixed(2) }% do preço)</div>
+      <div><strong>Recebível unitário (após taxa):</strong> ${money(netUnit)}</div>
+      <div style="margin-top:6px"><strong>Custo unitário:</strong> ${money(custoUnit)} — (matéria ${money(costs.materialCostUnit)}, energia ${money(costs.energyCostUnit)}, embalagem ${money(costs.packUnit)})</div>
+      <div><strong>Lucro unitário:</strong> ${money(lucroUnit)}</div>
+      <hr style="opacity:0.06"/>
+      <div><strong>Total venda:</strong> ${money(totalPrice)}</div>
+      <div><strong>Taxa Shopee (total):</strong> ${money(shFeeTotal)}</div>
+      <div><strong>Recebível total:</strong> ${money(netTotal)}</div>
+      <div><strong>Custo total:</strong> ${money(custoTotal)}</div>
+      <div><strong>Lucro total:</strong> ${money(lucroTotal)}</div>
+    `;
+  }
+
+  document.getElementById(`sell-calc-${productId}`).addEventListener('click', updateSellBreakdown);
+  document.getElementById(`sell-qty-${productId}`).addEventListener('input', updateSellBreakdown);
+  document.getElementById(`sell-price-${productId}`).addEventListener('input', updateSellBreakdown);
+  document.getElementById(`sell-sh-fixed-${productId}`).addEventListener('input', updateSellBreakdown);
+  document.getElementById(`sell-sh-pct-${productId}`).addEventListener('input', updateSellBreakdown);
+  document.getElementById(`sell-fil-${productId}`).addEventListener('change', updateSellBreakdown);
+
   // listeners
-  document.getElementById(`sell-cancel-${productId}`).addEventListener('click', ()=>{
-    form.remove();
-  });
+  document.getElementById(`sell-cancel-${productId}`).addEventListener('click', ()=>{ form.remove(); });
 
   document.getElementById(`sell-confirm-${productId}`).addEventListener('click', ()=>{
     const filId = document.getElementById(`sell-fil-${productId}`).value;
     const qty = Number(document.getElementById(`sell-qty-${productId}`).value || 0);
     const accId = document.getElementById(`sell-acc-${productId}`).value;
     const price = Number(document.getElementById(`sell-price-${productId}`).value || 0);
+    const fixed = Number(document.getElementById(`sell-sh-fixed-${productId}`).value || 0);
+    const pct = Number(document.getElementById(`sell-sh-pct-${productId}`).value || 0)/100;
     if(!filId || qty <= 0 || !accId || price <= 0){ alert('Preencha filamento, quantidade, conta e preço corretos.'); return; }
-    // efetuar venda
-    sellProduct(productId, filId, accId, qty, price);
+    sellProduct(productId, filId, accId, qty, price, fixed, pct);
     form.remove();
   });
+
+  // initial calc
+  updateSellBreakdown();
 }
 
-/* vendendo: decrementa filamento, cria entrada e registra venda */
-function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
+/* vendendo: decrementa filamento, adiciona entrada (valor bruto) na conta, registra taxa Shopee como despesa e registra venda em impSales */
+function sellProduct(productId, filamentId, accountId, qty, pricePerUnit, shoFixed=DEFAULT_SHOPEE_FIXED, shoPct=DEFAULT_SHOPEE_PCT){
   const prod = state.products.find(p=>p.id===productId);
   const fil = state.filaments.find(f=>f.id===filamentId);
   const acc = state.accounts.find(a=>a.id===accountId);
@@ -1135,34 +1029,26 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
 
   // registra venda no impSales
   const amount = Number(pricePerUnit || prod.price || 0) * Number(qty || 0);
-  const sale = {
-    id: Date.now().toString(),
-    date: todayISO(),
-    productId,
-    filamentId,
-    accountId,
-    qty,
-    amount
-  };
+  const sale = { id: Date.now().toString(), date: todayISO(), productId, filamentId, accountId, qty, amount };
   state.impSales.push(sale);
 
-  // cria uma entrada de receita para a conta (integra com o log principal)
-  const newExp = {
-    id: 'imp3d-sale-' + Date.now().toString(),
-    date: todayISO(),
-    desc: `Venda ${prod.name} x${qty}`,
-    amount: amount,
-    type: 'entrada',
-    accountId: accountId,
-    method: 'venda impressora3d',
-    category: 'impressora3d'
-  };
+  // cria entrada bruta na conta selecionada
+  const newExp = { id: 'imp3d-sale-' + Date.now().toString(), date: todayISO(), desc: `Venda ${prod.name} x${qty}`, amount: amount, type: 'entrada', accountId: accountId, method: 'venda impressora3d', category: 'impressora3d' };
   applyExpenseEffects(newExp);
   state.expenses.push(newExp);
 
-  saveState();
-  updateAll();
-  alert(`Venda registrada — total ${money(amount)}. Filamento reduzido ${totalFilNeeded.toFixed(2)} g.`);
+  // calcula taxa sho - por unidade (fixa + pct * pricePerUnit)
+  const feePerUnit = Number(shoFixed || 0) + Number(shoPct || 0) * Number(pricePerUnit || 0);
+  const feeTotal = Number(feePerUnit) * Number(qty || 0);
+  if(feeTotal > 0){
+    // registra taxa como despesa (retira da mesma conta)
+    const feeExp = { id: 'imp3d-shfee-' + Date.now().toString(), date: todayISO(), desc: `Taxa Shopee venda ${prod.name}`, amount: Number(feeTotal), type: 'saldo', accountId: accountId, method: 'taxa_shopee', category: 'taxa_plataforma' };
+    applyExpenseEffects(feeExp);
+    state.expenses.push(feeExp);
+  }
+
+  saveState(); updateAll();
+  alert(`Venda registrada — total ${money(amount)}. Filamento reduzido ${totalFilNeeded.toFixed(2)} g. Taxa Shopee: ${money(feeTotal)}.`);
 }
 
 /* render vendas */
@@ -1194,14 +1080,9 @@ function renderImpLosses(){
   });
 }
 
-/* export/import especifico Impressora3D */
+/* export impressora3d */
 function imp3dExport(){
-  const data = {
-    filaments: state.filaments,
-    products: state.products,
-    impSales: state.impSales,
-    impLosses: state.impLosses
-  };
+  const data = { filaments: state.filaments, products: state.products, impSales: state.impSales, impLosses: state.impLosses };
   const blob = new Blob([JSON.stringify(data)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1210,34 +1091,11 @@ function imp3dExport(){
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-/* limpeza impressora3d */
+/* limpar impressora3d */
 function imp3dClearAll(){
-  if(!confirm('Limpar todos os dados da Impressora3D (estoque, produtos, vendas, perdas)?')) return;
-  state.filaments = [];
-  state.products = [];
-  state.impSales = [];
-  state.impLosses = [];
+  if(!confirm('Limpar todos os dados da Impressora3D (estoque, produtos e vendas)?')) return;
+  state.filaments = []; state.products = []; state.impSales = []; state.impLosses = [];
   saveState(); updateAll();
-}
-
-/* adicionar produto */
-function handleAddProduct(){
-  const name = document.getElementById('prod-name').value.trim();
-  const hours = Number(document.getElementById('prod-hours').value || 0);
-  const fil_g = Number(document.getElementById('prod-fil-g').value || 0);
-  const price = Number(document.getElementById('prod-price').value || 0);
-  const desc = document.getElementById('prod-desc').value.trim();
-
-  if(!name || fil_g <= 0 || price <= 0){ alert('Nome, filamento por unidade (g) e preço são obrigatórios e devem ser válidos.'); return; }
-  const p = { id: Date.now().toString(), name, hours, fil_g: Number(fil_g), price: Number(price), desc };
-  state.products.push(p);
-  saveState();
-  document.getElementById('prod-name').value='';
-  document.getElementById('prod-hours').value='';
-  document.getElementById('prod-fil-g').value='';
-  document.getElementById('prod-price').value='';
-  document.getElementById('prod-desc').value='';
-  updateAll();
 }
 
 /* ---------- init ---------- */
@@ -1275,7 +1133,33 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const expDate = document.getElementById('exp-date');
   if(expDate) expDate.value = todayISO();
   const expForm = document.getElementById('expense-form');
-  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
+  if(expForm) expForm.addEventListener('submit', e=>{
+    e.preventDefault();
+    const date = document.getElementById('exp-date').value || todayISO();
+    const desc = document.getElementById('exp-desc').value.trim() || '';
+    const amount = Number(document.getElementById('exp-amount').value || 0);
+    const type = document.getElementById('exp-type').value;
+    const accountId = document.getElementById('exp-account').value;
+    const method = document.getElementById('exp-method').value.trim() || '';
+    const category = document.getElementById('exp-category').value || 'outros';
+    if(!amount || amount <= 0){ alert('Valor inválido'); return; }
+    if(type === 'credito'){
+      const month = getActiveMonth();
+      const sums = monthlySumsByAccount(month);
+      const total_used = sum(Object.values(sums), x => x.gasto_credito);
+      const avail = Number(state.totals.credito_total || 0) - total_used;
+      if(avail < amount){
+        if(!confirm(`Crédito disponível global é ${money(avail)}. Deseja registrar mesmo assim?`)) return;
+      }
+    }
+    const newExp = { id: Date.now().toString(), date, desc, amount, type, accountId, method, category };
+    applyExpenseEffects(newExp);
+    if(!Array.isArray(state.expenses)) state.expenses = [];
+    state.expenses.push(newExp);
+    saveState(); updateAll();
+    document.getElementById('exp-amount').value = ''; document.getElementById('exp-desc').value = ''; document.getElementById('exp-method').value = '';
+    activateTab('dashboard');
+  });
 
   // Auto selecionar Caju quando tipo = "vr"
   const expTypeSel = document.getElementById('exp-type');
@@ -1283,13 +1167,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if (expTypeSel && expAccountSel) {
     expTypeSel.addEventListener('change', () => {
       if (expTypeSel.value === 'vr') {
-        const caju = state.accounts.find(a =>
-          a.name.toLowerCase().includes('caju') ||
-          a.name.toLowerCase().includes('vr')
-        );
-        if (caju) {
-          expAccountSel.value = caju.id;
-        }
+        const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
+        if (caju) { expAccountSel.value = caju.id; }
       }
     });
   }
@@ -1314,17 +1193,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   const saveBtn = document.getElementById('save-btn');
   const resetBtn = document.getElementById('reset-btn');
-  if(saveBtn) saveBtn.addEventListener('click', ()=>{
-    saveState();
-    alert('Salvo localmente.');
-  });
+  if(saveBtn) saveBtn.addEventListener('click', ()=>{ saveState(); alert('Salvo localmente.'); });
   if(resetBtn) resetBtn.addEventListener('click', ()=>{
     if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
     state = JSON.parse(JSON.stringify(DEFAULT));
     state.meta.baseMonth = billingMonthOf(todayISO());
     state.meta.activeOffset = 0;
-    saveState();
-    location.reload();
+    saveState(); location.reload();
   });
 
   const backupExportBtn = document.getElementById('backup-export');
@@ -1369,12 +1244,10 @@ function updateAll(){
   renderEntradaPie();
   saveState();
   renderLogTable();
-
-  /* Impressora3D renders */
   renderFilaments();
   renderProducts();
   renderImpSales();
   renderImpLosses();
 }
 
-/* ---------- FIM DO ARQUIVO ---------- */
+/* ---------- FIM ---------- */
