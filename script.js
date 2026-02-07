@@ -7,7 +7,10 @@ const DEFAULT = {
     { id: "nubank", name: "Nubank", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "sicoob", name: "Sicoob", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "itau", name: "Itau", saldo: 0, guardado: 0, credit_total: 0 },
-    { id: "caju", name: "Caju", saldo: 0, guardado: 0, credit_total: 0 }
+    { id: "caju", name: "Caju", saldo: 0, guardado: 0, credit_total: 0 },
+    // novos bancos para integração com Impressora3D
+    { id: "imp3d", name: "imp3d", saldo: 0, guardado: 0, credit_total: 0 },
+    { id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 }
   ],
   totals: { credito_total: 0, vr_total: 0, entrada: 0 },
   expenses: [],
@@ -18,7 +21,7 @@ const DEFAULT = {
   filaments: [],      // {id,color,type,weight}
   products: [],       // {id,name,hours,fil_g,price,desc}
   impSales: [],       // {id,date,productId,filamentId,accountId,qty,amount}
-  meta: { baseMonth: null, activeOffset: 0 }
+  meta: { baseMonth: null, activeOffset: 0, lastCreditClosed: null }
 };
 
 let state = loadState();
@@ -66,6 +69,11 @@ function loadState(){
       if(!s.filaments) s.filaments = [];
       if(!s.products) s.products = [];
       if(!s.impSales) s.impSales = [];
+      // garantir contas imp3d / shopee em states antigos
+      const hasImp3d = (s.accounts || []).some(a=>a.id === 'imp3d');
+      const hasShopee = (s.accounts || []).some(a=>a.id === 'shopee');
+      if(!hasImp3d) s.accounts.push({ id: "imp3d", name: "imp3d", saldo: 0, guardado: 0, credit_total: 0 });
+      if(!hasShopee) s.accounts.push({ id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 });
       // ancora o índice no ciclo da fatura atual (24→23)
       s.meta.baseMonth = billingMonthOf(todayISO());
       return s;
@@ -631,7 +639,9 @@ function handleExpenseSubmit(e){
   activateTab('dashboard');
 }
 
-/* início do mês */
+/* início do mês (nova lógica pedida) */
+
+/* aplica salário (entrada) e VR (Caju) — soma no Itau e sobrescreve o Caju */
 function applySalary(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
@@ -759,13 +769,89 @@ function clearStartMonthFields(){
   if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
 }
 
+/* função de transferência Shopee -> Nubank (cria registros) */
+function transferShopeeToNubank(amount){
+  amount = Number(amount || 0);
+  if(!amount || amount <= 0) return alert('Valor inválido para transferência.');
+  const sh = state.accounts.find(a=>a.id==='shopee');
+  const nb = state.accounts.find(a=>a.id==='nubank');
+  if(!sh || !nb) return alert('Contas Shopee ou Nubank não encontradas.');
+  if(Number(sh.saldo || 0) < amount){
+    if(!confirm('Saldo Shopee insuficiente. Deseja permitir saldo negativo?')) {
+      return;
+    }
+  }
+  sh.saldo = Number(sh.saldo || 0) - amount;
+  nb.saldo = Number(nb.saldo || 0) + amount;
+
+  // criar entradas para registro: retirada de Shopee (saldo) e entrada em Nubank
+  const out = { id: 'imp3d-tr-out-' + Date.now().toString(), date: todayISO(), desc:`Transfer to Nubank`, amount, type:'saldo', accountId:'shopee', category:'transfer_shopee' };
+  const inent = { id: 'imp3d-tr-in-' + Date.now().toString(), date: todayISO(), desc:`Transfer from Shopee`, amount, type:'entrada', accountId:'nubank', category:'transfer_shopee' };
+  state.expenses.push(out);
+  state.expenses.push(inent);
+
+  saveState();
+  updateAll();
+  alert(`Transferido ${money(amount)} de Shopee para Nubank.`);
+}
+
 /* ---------- Bind dos novos botões no DOMContentLoaded ---------- */
-/* Substitua/adapte a parte do seu init onde ligava 'apply-start-month' e 'clear-start-month' */
+/* Substitui/ajusta a parte do init para ligar 'apply-salary', 'apply-card', 'close-month', etc. */
 document.addEventListener('DOMContentLoaded', ()=>{
 
-  // ... seu código init já existente (mantenha-o) ...
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+      document.getElementById('tab-'+tab).classList.add('active');
+    });
+  });
 
-  // ligar os novos botões (coloque depois da parte em que o DOM é inicializado)
+  const monthIndexEl = document.getElementById('month-index');
+  const monthLabelEl = document.getElementById('month-label');
+  function renderMonthIndex(){
+    monthIndexEl.textContent = state.meta.activeOffset;
+    monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset);
+  }
+  document.getElementById('prev-month').addEventListener('click', ()=>{
+    state.meta.activeOffset = Number(state.meta.activeOffset||0)-1;
+    saveState(); renderMonthIndex(); updateAll();
+  });
+  document.getElementById('next-month').addEventListener('click', ()=>{
+    state.meta.activeOffset = Number(state.meta.activeOffset||0)+1;
+    saveState(); renderMonthIndex(); updateAll();
+  });
+  renderMonthIndex();
+
+  populateAccountSelects();
+  renderEditableAccounts();
+  updateAll();
+
+  const expDate = document.getElementById('exp-date');
+  if(expDate) expDate.value = todayISO();
+  const expForm = document.getElementById('expense-form');
+  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
+
+  // Auto selecionar Caju quando tipo = "vr"
+  const expTypeSel = document.getElementById('exp-type');
+  const expAccountSel = document.getElementById('exp-account');
+  if (expTypeSel && expAccountSel) {
+    expTypeSel.addEventListener('change', () => {
+      if (expTypeSel.value === 'vr') {
+        const caju = state.accounts.find(a =>
+          a.name.toLowerCase().includes('caju') ||
+          a.name.toLowerCase().includes('vr')
+        );
+        if (caju) {
+          expAccountSel.value = caju.id;
+        }
+      }
+    });
+  }
+
+  // substitui a ligação antiga por novos botões (apply-salary, apply-card, close-month)
   const applySalaryBtn = document.getElementById('apply-salary');
   const applyCardBtn = document.getElementById('apply-card');
   const closeMonthBtn = document.getElementById('close-month');
@@ -776,9 +862,61 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(closeMonthBtn) closeMonthBtn.addEventListener('click', closeMonth);
   if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
 
-  // ... restante do seu código init ...
-});
+  const logFilter = document.getElementById('log-account-filter');
+  const logOnlyMonth = document.getElementById('log-show-only-month');
+  if(logFilter) logFilter.addEventListener('change', renderLogTable);
+  if(logOnlyMonth) logOnlyMonth.addEventListener('change', renderLogTable);
 
+  const includeToggle = document.getElementById('include-start-entrada');
+  if(includeToggle) includeToggle.addEventListener('change', ()=>{ renderEntradaPie(); });
+
+  const saveBtn = document.getElementById('save-btn');
+  const resetBtn = document.getElementById('reset-btn');
+  if(saveBtn) saveBtn.addEventListener('click', ()=>{
+    saveState();
+    alert('Salvo localmente.');
+  });
+  if(resetBtn) resetBtn.addEventListener('click', ()=>{
+    if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
+    state = JSON.parse(JSON.stringify(DEFAULT));
+    state.meta.baseMonth = billingMonthOf(todayISO());
+    state.meta.activeOffset = 0;
+    saveState();
+    location.reload();
+  });
+
+  const backupExportBtn = document.getElementById('backup-export');
+  const backupImportInput = document.getElementById('backup-import-input');
+  if(backupExportBtn) backupExportBtn.addEventListener('click', exportBackup);
+  if(backupImportInput) backupImportInput.addEventListener('change', handleBackupImport);
+
+  const boxCreateBtn = document.getElementById('box-create');
+  if(boxCreateBtn) boxCreateBtn.addEventListener('click', handleCreateBox);
+
+  // Impressora3D listeners (IDs que você já usou no HTML)
+  const filAddBtn = document.getElementById('fil-add');
+  if(filAddBtn) filAddBtn.addEventListener('click', handleAddFilament);
+
+  const prodAddBtn = document.getElementById('prod-add');
+  if(prodAddBtn) prodAddBtn.addEventListener('click', handleAddProduct);
+
+  const impExportBtn = document.getElementById('imp3d-export');
+  if(impExportBtn) impExportBtn.addEventListener('click', imp3dExport);
+
+  const impClearBtn = document.getElementById('imp3d-clear');
+  if(impClearBtn) impClearBtn.addEventListener('click', imp3dClearAll);
+
+  // botão de transferência Shopee -> Nubank (pode usar id 'sh-to-nb' ou 'sh-to-nb-btn')
+  const shToNbBtn1 = document.getElementById('sh-to-nb');
+  const shToNbBtn2 = document.getElementById('sh-to-nb-btn');
+  const shToNbHandler = ()=>{
+    const v = Number(prompt('Valor para transferir Shopee → Nubank (R$):','0'));
+    if(!v || v <= 0) return;
+    transferShopeeToNubank(v);
+  };
+  if(shToNbBtn1) shToNbBtn1.addEventListener('click', shToNbHandler);
+  if(shToNbBtn2) shToNbBtn2.addEventListener('click', shToNbHandler);
+});
 
 /* backup: exportar/importar JSON */
 function exportBackup(){
@@ -838,7 +976,7 @@ function renderFilaments(){
   if(!state.filaments.length){
     const p = document.createElement('p'); p.className='muted'; p.textContent = 'Nenhum filamento no estoque.';
     container.appendChild(p);
-    document.getElementById('imp3d-total-fil').textContent = 'R$ 0';
+    if(document.getElementById('imp3d-total-fil')) document.getElementById('imp3d-total-fil').textContent = '0 g';
     return;
   }
   state.filaments.forEach(f=>{
@@ -886,7 +1024,7 @@ function renderFilaments(){
   });
 
   const total = sum(state.filaments, x=>x.weight||0);
-  document.getElementById('imp3d-total-fil').textContent = `${total.toFixed(2)} g`;
+  if(document.getElementById('imp3d-total-fil')) document.getElementById('imp3d-total-fil').textContent = `${total.toFixed(2)} g`;
 }
 
 /* Add filamento */
@@ -912,7 +1050,7 @@ function renderProducts(){
   if(!state.products.length){
     const p = document.createElement('p'); p.className='muted'; p.textContent = 'Nenhum produto cadastrado.';
     container.appendChild(p);
-    document.getElementById('imp3d-count-prod').textContent = '0';
+    if(document.getElementById('imp3d-count-prod')) document.getElementById('imp3d-count-prod').textContent = '0';
     return;
   }
   state.products.forEach(prod=>{
@@ -955,7 +1093,7 @@ function renderProducts(){
     });
   });
 
-  document.getElementById('imp3d-count-prod').textContent = String(state.products.length);
+  if(document.getElementById('imp3d-count-prod')) document.getElementById('imp3d-count-prod').textContent = String(state.products.length);
 }
 
 /* abre um formulário de venda inline (abaixo do botão) */
@@ -1024,6 +1162,10 @@ function openSellFormForProduct(productId, anchorBtn){
     const o = document.createElement('option');
     o.value = a.id; o.textContent = a.name; accSel.appendChild(o);
   });
+  // default para Shopee se existir
+  if(state.accounts.some(a=>a.id==='shopee')){
+    accSel.value = 'shopee';
+  }
 
   // listeners
   document.getElementById(`sell-cancel-${productId}`).addEventListener('click', ()=>{
@@ -1150,108 +1292,10 @@ function handleAddProduct(){
 
 /* ---------- init ---------- */
 document.addEventListener('DOMContentLoaded', ()=>{
-  document.querySelectorAll('.tab-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-      document.getElementById('tab-'+tab).classList.add('active');
-    });
-  });
-
-  const monthIndexEl = document.getElementById('month-index');
-  const monthLabelEl = document.getElementById('month-label');
-  function renderMonthIndex(){
-    monthIndexEl.textContent = state.meta.activeOffset;
-    monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset);
-  }
-  document.getElementById('prev-month').addEventListener('click', ()=>{
-    state.meta.activeOffset = Number(state.meta.activeOffset||0)-1;
-    saveState(); renderMonthIndex(); updateAll();
-  });
-  document.getElementById('next-month').addEventListener('click', ()=>{
-    state.meta.activeOffset = Number(state.meta.activeOffset||0)+1;
-    saveState(); renderMonthIndex(); updateAll();
-  });
-  renderMonthIndex();
-
-  populateAccountSelects();
-  renderEditableAccounts();
-  updateAll();
-
-  const expDate = document.getElementById('exp-date');
-  if(expDate) expDate.value = todayISO();
-  const expForm = document.getElementById('expense-form');
-  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
-
-  // Auto selecionar Caju quando tipo = "vr"
-  const expTypeSel = document.getElementById('exp-type');
-  const expAccountSel = document.getElementById('exp-account');
-  if (expTypeSel && expAccountSel) {
-    expTypeSel.addEventListener('change', () => {
-      if (expTypeSel.value === 'vr') {
-        const caju = state.accounts.find(a =>
-          a.name.toLowerCase().includes('caju') ||
-          a.name.toLowerCase().includes('vr')
-        );
-        if (caju) {
-          expAccountSel.value = caju.id;
-        }
-      }
-    });
-  }
-
-  const applyBtn = document.getElementById('apply-start-month');
-  const clearBtn = document.getElementById('clear-start-month');
-  if(applyBtn) applyBtn.addEventListener('click', applyStartMonthConfig);
-  if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
-
-  const logFilter = document.getElementById('log-account-filter');
-  const logOnlyMonth = document.getElementById('log-show-only-month');
-  if(logFilter) logFilter.addEventListener('change', renderLogTable);
-  if(logOnlyMonth) logOnlyMonth.addEventListener('change', renderLogTable);
-
-  const includeToggle = document.getElementById('include-start-entrada');
-  if(includeToggle) includeToggle.addEventListener('change', ()=>{ renderEntradaPie(); });
-
-  const saveBtn = document.getElementById('save-btn');
-  const resetBtn = document.getElementById('reset-btn');
-  if(saveBtn) saveBtn.addEventListener('click', ()=>{
-    saveState();
-    alert('Salvo localmente.');
-  });
-  if(resetBtn) resetBtn.addEventListener('click', ()=>{
-    if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
-    state = JSON.parse(JSON.stringify(DEFAULT));
-    state.meta.baseMonth = billingMonthOf(todayISO());
-    state.meta.activeOffset = 0;
-    saveState();
-    location.reload();
-  });
-
-  const backupExportBtn = document.getElementById('backup-export');
-  const backupImportInput = document.getElementById('backup-import-input');
-  if(backupExportBtn) backupExportBtn.addEventListener('click', exportBackup);
-  if(backupImportInput) backupImportInput.addEventListener('change', handleBackupImport);
-
-  const boxCreateBtn = document.getElementById('box-create');
-  if(boxCreateBtn) boxCreateBtn.addEventListener('click', handleCreateBox);
-
-  // Impressora3D listeners
-  const filAddBtn = document.getElementById('fil-add');
-  if(filAddBtn) filAddBtn.addEventListener('click', handleAddFilament);
-
-  const prodAddBtn = document.getElementById('prod-add');
-  if(prodAddBtn) prodAddBtn.addEventListener('click', handleAddProduct);
-
-  const impExportBtn = document.getElementById('imp3d-export');
-  if(impExportBtn) impExportBtn.addEventListener('click', imp3dExport);
-
-  const impClearBtn = document.getElementById('imp3d-clear');
-  if(impClearBtn) impClearBtn.addEventListener('click', imp3dClearAll);
+  // (já ligado acima — aqui repetido para garantir ordem; normalmente suficiente com as ligações acima)
 });
 
+/* updateAll */
 function updateAll(){
   populateAccountSelects();
   renderEditableAccounts();
