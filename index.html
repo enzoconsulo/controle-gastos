@@ -311,7 +311,7 @@
         <!-- left: filamento + produtos -->
         <div class="panel-card">
           <h3 class="card-title">Estoque de filamentos</h3>
-          <p class="panel-subtitle">Adicione filamentos (cor, tipo e peso em gramas). Estes são itens de estoque usados ao vender produtos.</p>
+          <p class="panel-subtitle">Adicione filamentos (cor, tipo, peso em gramas e preço em R$). Estes são usados ao vender produtos.</p>
 
           <div class="form-grid" style="margin-top:8px;">
             <div class="form-field">
@@ -325,6 +325,10 @@
             <div class="form-field">
               <label>Peso (g)</label>
               <input id="fil-weight" type="number" step="0.01" placeholder="Quantidade em gramas"/>
+            </div>
+            <div class="form-field">
+              <label>Preço (R$) — preço total do rolo</label>
+              <input id="fil-price" type="number" step="0.01" placeholder="Preço do filamento (R$)"/>
             </div>
             <div class="form-actions">
               <button id="fil-add" class="btn-primary" type="button">Adicionar ao estoque</button>
@@ -368,16 +372,17 @@
           <div id="prod-list" style="margin-top:8px"></div>
         </div>
 
-        <!-- right: resumo e log-->
+        <!-- right: resumo and logs -->
         <div class="panel-card">
           <h3 class="card-title">Resumo Impressora3D</h3>
           <div class="yellow-grid" style="margin-top:8px">
-            <div class="y-row"><span>Total filamentos (g)</span><strong id="imp3d-total-fil">R$ 0</strong></div>
+            <div class="y-row"><span>Total filamentos (g)</span><strong id="imp3d-total-fil">0 g</strong></div>
             <div class="y-row"><span>Produtos cadastrados</span><strong id="imp3d-count-prod">0</strong></div>
+            <div class="y-row"><span>Conta imp3d</span><strong id="imp3d-acc-balance">—</strong></div>
           </div>
 
           <h3 class="card-title" style="margin-top:12px">Log de vendas (Impressora3D)</h3>
-          <div class="table-wrapper" style="max-height:300px">
+          <div class="table-wrapper" style="max-height:200px">
             <table>
               <thead>
                 <tr>
@@ -392,10 +397,27 @@
             </table>
           </div>
 
+          <h3 class="card-title" style="margin-top:12px">Perdas / retiradas de filamento</h3>
+          <div class="table-wrapper" style="max-height:200px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Filamento</th>
+                  <th>g</th>
+                  <th>Custo (R$)</th>
+                  <th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody id="imp3d-losses-body"></tbody>
+            </table>
+          </div>
+
           <h3 class="card-title" style="margin-top:12px">Ações rápidas</h3>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
             <button id="imp3d-export" class="btn">Exportar backup Impressora3D</button>
             <button id="imp3d-clear" class="btn ghost">Limpar tudo Impressora3D</button>
+            <button id="sh-to-nb" class="btn">Transferir Shopee → Nubank</button>
           </div>
         </div>
       </div>

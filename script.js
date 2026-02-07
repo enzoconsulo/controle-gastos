@@ -1,4 +1,4 @@
-/* ---------- INÍCIO DO ARQUIVO (mantive todo o código existente com as novas adições) ---------- */
+/* ---------- INÍCIO DO ARQUIVO (com Impressora3D e todas as funcionalidades pedidas) ---------- */
 
 const STORAGE_KEY = "controleExcel_v10";
 
@@ -8,7 +8,7 @@ const DEFAULT = {
     { id: "sicoob", name: "Sicoob", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "itau", name: "Itau", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "caju", name: "Caju", saldo: 0, guardado: 0, credit_total: 0 },
-    // novos bancos para integração com Impressora3D
+    // contas para Impressora3D
     { id: "imp3d", name: "imp3d", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 }
   ],
@@ -17,17 +17,16 @@ const DEFAULT = {
   investments: [],
   startEntries: [],
   investBoxes: [],
-  // >>> adições para Impressora3D
-  filaments: [],      // {id,color,type,weight}
+  filaments: [],      // {id,color,type,weight,price}
   products: [],       // {id,name,hours,fil_g,price,desc}
   impSales: [],       // {id,date,productId,filamentId,accountId,qty,amount}
+  impLosses: [],      // {id,date,filamentId,grams,cost,reason}
   meta: { baseMonth: null, activeOffset: 0, lastCreditClosed: null }
 };
 
 let state = loadState();
 
 /* helpers básicos */
-
 function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 const sum = (arr, fn)=> arr.reduce((s,x)=> s + (Number(fn?fn(x):x)||0), 0);
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -65,10 +64,10 @@ function loadState(){
       if(!s.meta) s.meta = DEFAULT.meta;
       if(!s.expenses) s.expenses = [];
       if(!s.investments) s.investments = [];
-      // garantir arrays novos
       if(!s.filaments) s.filaments = [];
       if(!s.products) s.products = [];
       if(!s.impSales) s.impSales = [];
+      if(!s.impLosses) s.impLosses = [];
       // garantir contas imp3d / shopee em states antigos
       const hasImp3d = (s.accounts || []).some(a=>a.id === 'imp3d');
       const hasShopee = (s.accounts || []).some(a=>a.id === 'shopee');
@@ -76,6 +75,7 @@ function loadState(){
       if(!hasShopee) s.accounts.push({ id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 });
       // ancora o índice no ciclo da fatura atual (24→23)
       s.meta.baseMonth = billingMonthOf(todayISO());
+      s.meta.lastCreditClosed = s.meta.lastCreditClosed || null;
       return s;
     }
   }catch(e){console.error(e);}
@@ -94,7 +94,6 @@ function computeMonthFromOffset(offset){
 function getActiveMonth(){ return computeMonthFromOffset(state.meta.activeOffset); }
 
 /* agregações por "mês de fatura" */
-
 function monthlySumsByAccount(month){
   const map = {};
   state.accounts.forEach(a => map[a.id] = { gasto_credito:0, gasto_vr:0, gasto_saldo:0 });
@@ -125,7 +124,7 @@ function calcDerived(month){
   return { sumsByAccount: sums, total_gasto_credito, available_credit_total, available_vr, guardado_total, saldo_display, credito_debito };
 }
 
-/* ---------- render (mantive existentes) ---------- */
+/* ---------- render ---------- */
 let gastoChart=null, categoryChart=null, monthlyChart=null, entradaChart=null;
 
 function renderAccountsTable(){
@@ -150,18 +149,28 @@ function renderAccountsTable(){
     `;
     tbody.appendChild(tr);
   });
+
+  // atualizar resumo conta imp3d se existir
+  const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
+  const imp3dBalanceEl = document.getElementById('imp3d-acc-balance');
+  if(imp3dBalanceEl) imp3dBalanceEl.textContent = imp3dAcc ? money(imp3dAcc.saldo) : '—';
 }
 
 function renderYellow(){
   const d = calcDerived(getActiveMonth());
-  document.getElementById('avail-credit').textContent = money(d.available_credit_total);
-  document.getElementById('avail-vr').textContent = money(d.available_vr);
-  document.getElementById('avail-saldo').textContent = money(d.saldo_display);
-  document.getElementById('avail-guardado').textContent = money(d.guardado_total);
-  document.getElementById('credit-debit-small').textContent = money(d.credito_debito);
+  const elAvailCredit = document.getElementById('avail-credit');
+  const elAvailVr = document.getElementById('avail-vr');
+  const elAvailSaldo = document.getElementById('avail-saldo');
+  const elAvailGuardado = document.getElementById('avail-guardado');
+  const elCd = document.getElementById('credit-debit-small');
+  if(elAvailCredit) elAvailCredit.textContent = money(d.available_credit_total);
+  if(elAvailVr) elAvailVr.textContent = money(d.available_vr);
+  if(elAvailSaldo) elAvailSaldo.textContent = money(d.saldo_display);
+  if(elAvailGuardado) elAvailGuardado.textContent = money(d.guardado_total);
+  if(elCd) elCd.textContent = money(d.credito_debito);
 }
 
-/* charts (mantidos) */
+/* charts */
 function baseChartOptions(){
   return {
     responsive:true,
@@ -603,7 +612,7 @@ function activateTab(tabName){
   });
 }
 
-/* submit gasto/entrada — sem reload, atualiza tudo na hora e vai pro dashboard */
+/* submit gasto/entrada */
 function handleExpenseSubmit(e){
   e.preventDefault();
   const date = document.getElementById('exp-date').value || todayISO();
@@ -639,9 +648,7 @@ function handleExpenseSubmit(e){
   activateTab('dashboard');
 }
 
-/* início do mês (nova lógica pedida) */
-
-/* aplica salário (entrada) e VR (Caju) — soma no Itau e sobrescreve o Caju */
+/* início do mês */
 function applySalary(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
@@ -680,12 +687,7 @@ function applySalary(){
   alert(`Entrada aplicada: ${money(entrada)}\nVR (Caju) definido: ${money(vr)}`);
 }
 
-/**
- * Aplica apenas o cartão: fecha a fatura do mês ANTERIOR e atualiza o crédito global
- * - Fecha a fatura anterior calculando o que sobrou do crédito e adiciona ao Nubank.
- * - Atualiza state.totals.credito_total para o valor do input (novo limite).
- * - Registra em state.meta.lastCreditClosed para evitar fechar duas vezes.
- */
+/* applyCard - fecha fatura anterior e atualiza crédito global */
 function applyCard(){
   const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
@@ -699,7 +701,7 @@ function applyCard(){
     return;
   }
 
-  // 1) FECHAMENTO DO CRÉDITO DO MÊS ANTERIOR (exclui gastos de crédito no CAJU)
+  // 1) FECHAMENTO DO CRÉDITO DO MÊS ANTERIOR
   const prevCreditTotal = Number(state.totals.credito_total || 0);
   const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   const cajuId = caju ? caju.id : null;
@@ -720,10 +722,10 @@ function applyCard(){
   // marca mês como fechado (para não fechar duas vezes)
   state.meta.lastCreditClosed = prevMonth;
 
-  // 2) ATUALIZA O CRÉDITO GLOBAL (substitui pelo valor informado — você só atualiza no dia da fatura)
+  // 2) ATUALIZA O CRÉDITO GLOBAL
   state.totals.credito_total = newGlobalCredit;
 
-  // 3) (opcional) atualizar VR/caju com o valor informado se quiser garantir consistência
+  // 3) atualizar VR/caju se informado
   if(caju && !isNaN(vr) && vr > 0){
     state.totals.vr_total = vr;
     caju.saldo = Number(vr || 0);
@@ -745,10 +747,7 @@ function applyCard(){
   alert(`Fatura de ${prevMonth} fechada.\nDiferença (adicionada a Nubank): ${money(creditBalance)}\nCrédito global atualizado: ${money(newGlobalCredit)}`);
 }
 
-/**
- * Fecha o mês lógico: avança state.meta.activeOffset em +1 (mantendo histórico).
- * Não remove históricos — apenas muda o mês ativo para próxima fatura (24→23 logic).
- */
+/* Fecha o mês lógico */
 function closeMonth(){
   if(!confirm('Tem certeza que deseja fechar o mês e avançar o índice do mês lógico?')) return;
   state.meta.activeOffset = Number(state.meta.activeOffset || 0) + 1;
@@ -757,7 +756,7 @@ function closeMonth(){
   alert('Mês fechado. Índice do mês avançado.');
 }
 
-/* manter a função de limpar os campos (já existia) */
+/* limpar campos início mês */
 function clearStartMonthFields(){
   const vrInput = document.getElementById('inicio-vr-total');
   const entInput = document.getElementById('inicio-entrada-total');
@@ -769,7 +768,7 @@ function clearStartMonthFields(){
   if(inicioCredits) inicioCredits.querySelectorAll('input').forEach(i=> i.value = '');
 }
 
-/* função de transferência Shopee -> Nubank (cria registros) */
+/* transfer Shopee -> Nubank */
 function transferShopeeToNubank(amount){
   amount = Number(amount || 0);
   if(!amount || amount <= 0) return alert('Valor inválido para transferência.');
@@ -785,8 +784,8 @@ function transferShopeeToNubank(amount){
   nb.saldo = Number(nb.saldo || 0) + amount;
 
   // criar entradas para registro: retirada de Shopee (saldo) e entrada em Nubank
-  const out = { id: 'imp3d-tr-out-' + Date.now().toString(), date: todayISO(), desc:`Transfer to Nubank`, amount, type:'saldo', accountId:'shopee', category:'transfer_shopee' };
-  const inent = { id: 'imp3d-tr-in-' + Date.now().toString(), date: todayISO(), desc:`Transfer from Shopee`, amount, type:'entrada', accountId:'nubank', category:'transfer_shopee' };
+  const out = { id: 'imp3d-tr-out-' + Date.now().toString(), date: todayISO(), desc:`Transfer to Nubank`, amount, type:'saldo', accountId:'shopee', category:'transfer_shopee', method:'transfer' };
+  const inent = { id: 'imp3d-tr-in-' + Date.now().toString(), date: todayISO(), desc:`Transfer from Shopee`, amount, type:'entrada', accountId:'nubank', category:'transfer_shopee', method:'transfer' };
   state.expenses.push(out);
   state.expenses.push(inent);
 
@@ -795,130 +794,7 @@ function transferShopeeToNubank(amount){
   alert(`Transferido ${money(amount)} de Shopee para Nubank.`);
 }
 
-/* ---------- Bind dos novos botões no DOMContentLoaded ---------- */
-/* Substitui/ajusta a parte do init para ligar 'apply-salary', 'apply-card', 'close-month', etc. */
-document.addEventListener('DOMContentLoaded', ()=>{
-
-  document.querySelectorAll('.tab-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-      document.getElementById('tab-'+tab).classList.add('active');
-    });
-  });
-
-  const monthIndexEl = document.getElementById('month-index');
-  const monthLabelEl = document.getElementById('month-label');
-  function renderMonthIndex(){
-    monthIndexEl.textContent = state.meta.activeOffset;
-    monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset);
-  }
-  document.getElementById('prev-month').addEventListener('click', ()=>{
-    state.meta.activeOffset = Number(state.meta.activeOffset||0)-1;
-    saveState(); renderMonthIndex(); updateAll();
-  });
-  document.getElementById('next-month').addEventListener('click', ()=>{
-    state.meta.activeOffset = Number(state.meta.activeOffset||0)+1;
-    saveState(); renderMonthIndex(); updateAll();
-  });
-  renderMonthIndex();
-
-  populateAccountSelects();
-  renderEditableAccounts();
-  updateAll();
-
-  const expDate = document.getElementById('exp-date');
-  if(expDate) expDate.value = todayISO();
-  const expForm = document.getElementById('expense-form');
-  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
-
-  // Auto selecionar Caju quando tipo = "vr"
-  const expTypeSel = document.getElementById('exp-type');
-  const expAccountSel = document.getElementById('exp-account');
-  if (expTypeSel && expAccountSel) {
-    expTypeSel.addEventListener('change', () => {
-      if (expTypeSel.value === 'vr') {
-        const caju = state.accounts.find(a =>
-          a.name.toLowerCase().includes('caju') ||
-          a.name.toLowerCase().includes('vr')
-        );
-        if (caju) {
-          expAccountSel.value = caju.id;
-        }
-      }
-    });
-  }
-
-  // substitui a ligação antiga por novos botões (apply-salary, apply-card, close-month)
-  const applySalaryBtn = document.getElementById('apply-salary');
-  const applyCardBtn = document.getElementById('apply-card');
-  const closeMonthBtn = document.getElementById('close-month');
-  const clearBtn = document.getElementById('clear-start-month');
-
-  if(applySalaryBtn) applySalaryBtn.addEventListener('click', applySalary);
-  if(applyCardBtn) applyCardBtn.addEventListener('click', applyCard);
-  if(closeMonthBtn) closeMonthBtn.addEventListener('click', closeMonth);
-  if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
-
-  const logFilter = document.getElementById('log-account-filter');
-  const logOnlyMonth = document.getElementById('log-show-only-month');
-  if(logFilter) logFilter.addEventListener('change', renderLogTable);
-  if(logOnlyMonth) logOnlyMonth.addEventListener('change', renderLogTable);
-
-  const includeToggle = document.getElementById('include-start-entrada');
-  if(includeToggle) includeToggle.addEventListener('change', ()=>{ renderEntradaPie(); });
-
-  const saveBtn = document.getElementById('save-btn');
-  const resetBtn = document.getElementById('reset-btn');
-  if(saveBtn) saveBtn.addEventListener('click', ()=>{
-    saveState();
-    alert('Salvo localmente.');
-  });
-  if(resetBtn) resetBtn.addEventListener('click', ()=>{
-    if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
-    state = JSON.parse(JSON.stringify(DEFAULT));
-    state.meta.baseMonth = billingMonthOf(todayISO());
-    state.meta.activeOffset = 0;
-    saveState();
-    location.reload();
-  });
-
-  const backupExportBtn = document.getElementById('backup-export');
-  const backupImportInput = document.getElementById('backup-import-input');
-  if(backupExportBtn) backupExportBtn.addEventListener('click', exportBackup);
-  if(backupImportInput) backupImportInput.addEventListener('change', handleBackupImport);
-
-  const boxCreateBtn = document.getElementById('box-create');
-  if(boxCreateBtn) boxCreateBtn.addEventListener('click', handleCreateBox);
-
-  // Impressora3D listeners (IDs que você já usou no HTML)
-  const filAddBtn = document.getElementById('fil-add');
-  if(filAddBtn) filAddBtn.addEventListener('click', handleAddFilament);
-
-  const prodAddBtn = document.getElementById('prod-add');
-  if(prodAddBtn) prodAddBtn.addEventListener('click', handleAddProduct);
-
-  const impExportBtn = document.getElementById('imp3d-export');
-  if(impExportBtn) impExportBtn.addEventListener('click', imp3dExport);
-
-  const impClearBtn = document.getElementById('imp3d-clear');
-  if(impClearBtn) impClearBtn.addEventListener('click', imp3dClearAll);
-
-  // botão de transferência Shopee -> Nubank (pode usar id 'sh-to-nb' ou 'sh-to-nb-btn')
-  const shToNbBtn1 = document.getElementById('sh-to-nb');
-  const shToNbBtn2 = document.getElementById('sh-to-nb-btn');
-  const shToNbHandler = ()=>{
-    const v = Number(prompt('Valor para transferir Shopee → Nubank (R$):','0'));
-    if(!v || v <= 0) return;
-    transferShopeeToNubank(v);
-  };
-  if(shToNbBtn1) shToNbBtn1.addEventListener('click', shToNbHandler);
-  if(shToNbBtn2) shToNbBtn2.addEventListener('click', shToNbHandler);
-});
-
-/* backup: exportar/importar JSON */
+/* ---------- BACKUP ---------- */
 function exportBackup(){
   try{
     const dataStr = JSON.stringify(state);
@@ -937,7 +813,6 @@ function exportBackup(){
     alert('Não foi possível gerar o backup.');
   }
 }
-
 function handleBackupImport(e){
   const file = e.target.files[0];
   if(!file){
@@ -966,7 +841,7 @@ function handleBackupImport(e){
   reader.readAsText(file);
 }
 
-/* ---------- IMPRESSORA3D: funções de UI e lógica ---------- */
+/* ---------- IMPRESSORA3D: UI + lógica ---------- */
 
 /* Render lista de filamentos */
 function renderFilaments(){
@@ -988,10 +863,15 @@ function renderFilaments(){
     el.innerHTML = `<div>
         <div style="font-weight:700">${f.color} — ${f.type}</div>
         <div style="font-size:0.85rem;color:var(--muted);">ID: ${f.id}</div>
+        <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">Preço: ${money(Number(f.price||0))}</div>
       </div>
       <div style="text-align:right">
         <div style="font-weight:700">${(Number(f.weight)||0).toFixed(2)} g</div>
-        <div style="margin-top:6px"><button class="btn small fil-edit" data-id="${f.id}">Editar</button> <button class="btn small fil-del" data-id="${f.id}">Remover</button></div>
+        <div style="margin-top:6px">
+          <button class="btn small fil-edit" data-id="${f.id}">Editar</button>
+          <button class="btn small fil-withdraw" data-id="${f.id}">Retirar</button>
+          <button class="btn small fil-del" data-id="${f.id}">Remover</button>
+        </div>
       </div>`;
     container.appendChild(el);
   });
@@ -1005,6 +885,7 @@ function renderFilaments(){
       saveState(); updateAll();
     });
   });
+
   container.querySelectorAll('.fil-edit').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1016,10 +897,67 @@ function renderFilaments(){
       if(newType === null) return;
       const newWeight = prompt('Peso (g):', f.weight);
       if(newWeight === null) return;
+      const newPrice = prompt('Preço (R$):', f.price || '0');
+      if(newPrice === null) return;
       f.color = newColor.trim();
       f.type = newType.trim();
       f.weight = Number(newWeight || 0);
+      f.price = Number(newPrice || 0);
       saveState(); updateAll();
+    });
+  });
+
+  container.querySelectorAll('.fil-withdraw').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      const f = state.filaments.find(x=>x.id===id);
+      if(!f) return;
+      const gramsStr = prompt(`Quantos gramas deseja retirar do filamento "${f.color} — ${f.type}"?`, '0');
+      if(gramsStr === null) return;
+      const grams = Number(gramsStr || 0);
+      if(!grams || grams <= 0){ alert('Quantidade inválida'); return; }
+      const costStr = prompt('Qual o custo dessa retirada em R$? (ex: 3.50)', '0');
+      if(costStr === null) return;
+      const cost = Number(costStr || 0);
+      const reason = prompt('Motivo (opcional):', 'Perda / falha de impressão') || '';
+
+      if(Number(f.weight || 0) < grams){
+        if(!confirm(`Filamento tem ${Number(f.weight||0).toFixed(2)} g, você quer permitir ficar negativo?`)) return;
+      }
+
+      // subtrai filamento
+      f.weight = Number(f.weight || 0) - grams;
+
+      // registra perda em impLosses
+      const loss = {
+        id: 'loss-' + Date.now().toString(),
+        date: todayISO(),
+        filamentId: id,
+        grams: Number(grams),
+        cost: Number(cost),
+        reason: reason
+      };
+      state.impLosses.push(loss);
+
+      // registra despesa no log principal (conta imp3d)
+      const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
+      const accId = imp3dAcc ? imp3dAcc.id : (state.accounts[0] && state.accounts[0].id);
+      const exp = {
+        id: 'imp3d-loss-exp-' + Date.now().toString(),
+        date: todayISO(),
+        desc: `Retirada filamento ${f.color} (${reason||'perda'})`,
+        amount: Number(cost || 0),
+        type: 'saldo',
+        accountId: accId,
+        method: 'retirada filamento',
+        category: 'filamento_perda'
+      };
+      applyExpenseEffects(exp);
+      state.expenses.push(exp);
+
+      saveState();
+      updateAll();
+      alert(`Retirada registrada: ${grams} g / ${money(cost)}.`);
     });
   });
 
@@ -1032,13 +970,15 @@ function handleAddFilament(){
   const color = document.getElementById('fil-color').value.trim();
   const type = document.getElementById('fil-type').value.trim();
   const weight = Number(document.getElementById('fil-weight').value || 0);
+  const price = Number(document.getElementById('fil-price').value || 0);
   if(!color || !type || !weight || weight <= 0){ alert('Preencha cor, tipo e peso (g) válidos.'); return; }
-  const f = { id: Date.now().toString(), color, type, weight: Number(weight) };
+  const f = { id: Date.now().toString(), color, type, weight: Number(weight), price: Number(price||0) };
   state.filaments.push(f);
   saveState();
   document.getElementById('fil-color').value='';
   document.getElementById('fil-type').value='';
   document.getElementById('fil-weight').value='';
+  document.getElementById('fil-price').value='';
   updateAll();
 }
 
@@ -1096,15 +1036,13 @@ function renderProducts(){
   if(document.getElementById('imp3d-count-prod')) document.getElementById('imp3d-count-prod').textContent = String(state.products.length);
 }
 
-/* abre um formulário de venda inline (abaixo do botão) */
+/* abre formulário de venda inline */
 function openSellFormForProduct(productId, anchorBtn){
-  // se já existe, remover
   const existing = document.getElementById('imp3d-sell-form-'+productId);
   if(existing){ existing.remove(); return; }
 
   const prod = state.products.find(p=>p.id===productId);
   if(!prod) return;
-  // criar form
   const form = document.createElement('div');
   form.id = 'imp3d-sell-form-'+productId;
   form.style.marginTop = '8px';
@@ -1136,7 +1074,6 @@ function openSellFormForProduct(productId, anchorBtn){
       </div>
     </div>
   `;
-  // inserir após o card do produto
   const card = anchorBtn.closest('.box-card');
   card.parentNode.insertBefore(form, card.nextSibling);
 
@@ -1146,7 +1083,7 @@ function openSellFormForProduct(productId, anchorBtn){
   state.filaments.forEach(f=>{
     const opt = document.createElement('option');
     opt.value = f.id;
-    opt.textContent = `${f.color} — ${f.type} (${Number(f.weight).toFixed(2)} g)`;
+    opt.textContent = `${f.color} — ${f.type} (${Number(f.weight).toFixed(2)} g) — ${money(f.price||0)}`;
     filSel.appendChild(opt);
   });
   if(!state.filaments.length){
@@ -1162,10 +1099,7 @@ function openSellFormForProduct(productId, anchorBtn){
     const o = document.createElement('option');
     o.value = a.id; o.textContent = a.name; accSel.appendChild(o);
   });
-  // default para Shopee se existir
-  if(state.accounts.some(a=>a.id==='shopee')){
-    accSel.value = 'shopee';
-  }
+  if(state.accounts.some(a=>a.id==='shopee')) accSel.value = 'shopee';
 
   // listeners
   document.getElementById(`sell-cancel-${productId}`).addEventListener('click', ()=>{
@@ -1184,7 +1118,7 @@ function openSellFormForProduct(productId, anchorBtn){
   });
 }
 
-/* vendendo: decrementa filamento, adiciona entrada (valor) na conta e registra no impSales */
+/* vendendo: decrementa filamento, cria entrada e registra venda */
 function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   const prod = state.products.find(p=>p.id===productId);
   const fil = state.filaments.find(f=>f.id===filamentId);
@@ -1231,7 +1165,7 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   alert(`Venda registrada — total ${money(amount)}. Filamento reduzido ${totalFilNeeded.toFixed(2)} g.`);
 }
 
-/* render log de vendas */
+/* render vendas */
 function renderImpSales(){
   const tbody = document.getElementById('imp3d-sales-body');
   if(!tbody) return;
@@ -1246,12 +1180,27 @@ function renderImpSales(){
   });
 }
 
-/* export/import específico Impressora3D */
+/* render perdas */
+function renderImpLosses(){
+  const tbody = document.getElementById('imp3d-losses-body');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  const arr = [...state.impLosses].sort((a,b)=> a.date < b.date ? 1 : -1);
+  arr.forEach(l=>{
+    const fil = state.filaments.find(f=>f.id===l.filamentId) || {color:l.filamentId};
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${l.date}</td><td>${fil.color||fil.id}</td><td>${Number(l.grams).toFixed(2)}</td><td>${money(l.cost)}</td><td>${l.reason||''}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* export/import especifico Impressora3D */
 function imp3dExport(){
   const data = {
     filaments: state.filaments,
     products: state.products,
-    impSales: state.impSales
+    impSales: state.impSales,
+    impLosses: state.impLosses
   };
   const blob = new Blob([JSON.stringify(data)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
@@ -1263,10 +1212,11 @@ function imp3dExport(){
 
 /* limpeza impressora3d */
 function imp3dClearAll(){
-  if(!confirm('Limpar todos os dados da Impressora3D (estoque, produtos e vendas)?')) return;
+  if(!confirm('Limpar todos os dados da Impressora3D (estoque, produtos, vendas, perdas)?')) return;
   state.filaments = [];
   state.products = [];
   state.impSales = [];
+  state.impLosses = [];
   saveState(); updateAll();
 }
 
@@ -1292,10 +1242,121 @@ function handleAddProduct(){
 
 /* ---------- init ---------- */
 document.addEventListener('DOMContentLoaded', ()=>{
-  // (já ligado acima — aqui repetido para garantir ordem; normalmente suficiente com as ligações acima)
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+      document.getElementById('tab-'+tab).classList.add('active');
+    });
+  });
+
+  const monthIndexEl = document.getElementById('month-index');
+  const monthLabelEl = document.getElementById('month-label');
+  function renderMonthIndex(){
+    monthIndexEl.textContent = state.meta.activeOffset;
+    monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset);
+  }
+  document.getElementById('prev-month').addEventListener('click', ()=>{
+    state.meta.activeOffset = Number(state.meta.activeOffset||0)-1;
+    saveState(); renderMonthIndex(); updateAll();
+  });
+  document.getElementById('next-month').addEventListener('click', ()=>{
+    state.meta.activeOffset = Number(state.meta.activeOffset||0)+1;
+    saveState(); renderMonthIndex(); updateAll();
+  });
+  renderMonthIndex();
+
+  populateAccountSelects();
+  renderEditableAccounts();
+  updateAll();
+
+  const expDate = document.getElementById('exp-date');
+  if(expDate) expDate.value = todayISO();
+  const expForm = document.getElementById('expense-form');
+  if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
+
+  // Auto selecionar Caju quando tipo = "vr"
+  const expTypeSel = document.getElementById('exp-type');
+  const expAccountSel = document.getElementById('exp-account');
+  if (expTypeSel && expAccountSel) {
+    expTypeSel.addEventListener('change', () => {
+      if (expTypeSel.value === 'vr') {
+        const caju = state.accounts.find(a =>
+          a.name.toLowerCase().includes('caju') ||
+          a.name.toLowerCase().includes('vr')
+        );
+        if (caju) {
+          expAccountSel.value = caju.id;
+        }
+      }
+    });
+  }
+
+  // início do mês buttons
+  const applySalaryBtn = document.getElementById('apply-salary');
+  const applyCardBtn = document.getElementById('apply-card');
+  const closeMonthBtn = document.getElementById('close-month');
+  const clearBtn = document.getElementById('clear-start-month');
+  if(applySalaryBtn) applySalaryBtn.addEventListener('click', applySalary);
+  if(applyCardBtn) applyCardBtn.addEventListener('click', applyCard);
+  if(closeMonthBtn) closeMonthBtn.addEventListener('click', closeMonth);
+  if(clearBtn) clearBtn.addEventListener('click', clearStartMonthFields);
+
+  const logFilter = document.getElementById('log-account-filter');
+  const logOnlyMonth = document.getElementById('log-show-only-month');
+  if(logFilter) logFilter.addEventListener('change', renderLogTable);
+  if(logOnlyMonth) logOnlyMonth.addEventListener('change', renderLogTable);
+
+  const includeToggle = document.getElementById('include-start-entrada');
+  if(includeToggle) includeToggle.addEventListener('change', ()=>{ renderEntradaPie(); });
+
+  const saveBtn = document.getElementById('save-btn');
+  const resetBtn = document.getElementById('reset-btn');
+  if(saveBtn) saveBtn.addEventListener('click', ()=>{
+    saveState();
+    alert('Salvo localmente.');
+  });
+  if(resetBtn) resetBtn.addEventListener('click', ()=>{
+    if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
+    state = JSON.parse(JSON.stringify(DEFAULT));
+    state.meta.baseMonth = billingMonthOf(todayISO());
+    state.meta.activeOffset = 0;
+    saveState();
+    location.reload();
+  });
+
+  const backupExportBtn = document.getElementById('backup-export');
+  const backupImportInput = document.getElementById('backup-import-input');
+  if(backupExportBtn) backupExportBtn.addEventListener('click', exportBackup);
+  if(backupImportInput) backupImportInput.addEventListener('change', handleBackupImport);
+
+  const boxCreateBtn = document.getElementById('box-create');
+  if(boxCreateBtn) boxCreateBtn.addEventListener('click', handleCreateBox);
+
+  // Impressora3D listeners
+  const filAddBtn = document.getElementById('fil-add');
+  if(filAddBtn) filAddBtn.addEventListener('click', handleAddFilament);
+
+  const prodAddBtn = document.getElementById('prod-add');
+  if(prodAddBtn) prodAddBtn.addEventListener('click', handleAddProduct);
+
+  const impExportBtn = document.getElementById('imp3d-export');
+  if(impExportBtn) impExportBtn.addEventListener('click', imp3dExport);
+
+  const impClearBtn = document.getElementById('imp3d-clear');
+  if(impClearBtn) impClearBtn.addEventListener('click', imp3dClearAll);
+
+  // botão de transferência Shopee -> Nubank
+  const shToNbBtn = document.getElementById('sh-to-nb');
+  if(shToNbBtn) shToNbBtn.addEventListener('click', ()=>{
+    const v = Number(prompt('Valor para transferir Shopee → Nubank (R$):','0'));
+    if(!v || v <= 0) return;
+    transferShopeeToNubank(v);
+  });
 });
 
-/* updateAll */
 function updateAll(){
   populateAccountSelects();
   renderEditableAccounts();
@@ -1313,6 +1374,7 @@ function updateAll(){
   renderFilaments();
   renderProducts();
   renderImpSales();
+  renderImpLosses();
 }
 
 /* ---------- FIM DO ARQUIVO ---------- */
