@@ -2,9 +2,20 @@
   const RENDER_BACKEND_URL = "https://controle-gastos-be.onrender.com";
   const CLIENT_USER_ID = "enzo"; // pode ser qualquer string (uso pessoal)
 
-  function ensureState() {
-    return window.state && Array.isArray(window.state.expenses);
-  }
+  function waitForState(timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+        const start = Date.now();
+        const t = setInterval(() => {
+        if (window.state && Array.isArray(window.state.expenses)) {
+            clearInterval(t);
+            resolve(true);
+        } else if (Date.now() - start > timeoutMs) {
+            clearInterval(t);
+            reject(new Error("state nao carregou a tempo. confira se sync-pluggy-ui.js está depois do script.js"));
+        }
+        }, 100);
+    });
+    }
 
   function hashKey(parts) {
     const base = parts.join("|");
@@ -14,7 +25,6 @@
   }
 
   function importTransactions(txs, accountFallback = "nubank") {
-    if (!ensureState()) return alert("state não carregou; confira ordem dos scripts.");
 
     const existing = new Set((window.state.expenses || []).map(e => e._syncKey).filter(Boolean));
     let added = 0, skipped = 0;
@@ -112,40 +122,40 @@
 
     // Abrir widget Pluggy Connect
     card.querySelector("#btn-nu-connect").addEventListener("click", async () => {
-      try {
-        const itemId = getItemId(); // se existir, abre "update"
+    try {
+        await waitForState();
+
+        const itemId = getItemId();
         const connectToken = await getConnectToken(itemId);
 
-        // pluggyConnect global vem do script CDN
         const pc = new window.PluggyConnect({
-          connectToken,
-          // quando conectar com sucesso, salva itemId
-          onSuccess: ({ item }) => {
+        connectToken,
+        onSuccess: ({ item }) => {
             if (item?.id) setItemId(item.id);
             alert("Nubank conectado com sucesso!");
-          },
-          onError: (err) => {
-            alert("Erro ao conectar: " + (err?.message || "desconhecido"));
-          }
+        },
+        onError: (err) => alert("Erro ao conectar: " + (err?.message || "desconhecido"))
         });
 
         pc.init();
-      } catch (e) {
+    } catch (e) {
         alert(e.message || String(e));
-      }
+    }
     });
 
     // Sincronizar
     card.querySelector("#btn-nu-sync").addEventListener("click", async () => {
-      try {
+    try {
+        await waitForState(); // <<< garante que state existe
+
         const itemId = getItemId();
         if (!itemId) return alert("Primeiro clique em 'Conectar Nubank'.");
 
         const txs = await sync(itemId);
         importTransactions(txs, "nubank");
-      } catch (e) {
+    } catch (e) {
         alert(e.message || String(e));
-      }
+    }
     });
   }
 
