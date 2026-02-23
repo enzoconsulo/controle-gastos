@@ -83,16 +83,16 @@
     return data.connectToken || data.accessToken;
   }
 
-  async function sync(itemId) {
+  async function sync(itemId, from, to) {
     const r = await fetch(`${RENDER_BACKEND_URL}/sync`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ itemId })
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ itemId, from: from || null, to: to || null })
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || "Falha ao sincronizar");
     return data.transactions || [];
-  }
+    }
 
   function mountUI() {
     const tab = document.getElementById("tab-log");
@@ -106,6 +106,16 @@
       <p class="muted" style="margin-top:6px">
         1) Conectar (login/consentimento) • 2) Sincronizar (importar transações)
       </p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:end">
+        <div style="display:flex; flex-direction:column; gap:4px">
+            <label style="font-size:0.85rem;color:var(--muted)">De</label>
+            <input id="nu-from" type="date" style="padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.08);color:#fff"/>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px">
+            <label style="font-size:0.85rem;color:var(--muted)">Até</label>
+            <input id="nu-to" type="date" style="padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.08);color:#fff"/>
+        </div>
+       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px">
         <button id="btn-nu-connect" class="btn">Conectar Nubank</button>
         <button id="btn-nu-sync" class="btn-primary">Sincronizar</button>
@@ -115,6 +125,12 @@
       </small>
     `;
     tab.appendChild(card);
+
+    const toD = new Date();
+    const fromD = new Date();
+    fromD.setDate(fromD.getDate() - 1);
+    card.querySelector("#nu-to").value = toD.toISOString().slice(0, 10);
+    card.querySelector("#nu-from").value = fromD.toISOString().slice(0, 10);
 
     const ITEM_KEY = "pluggy_item_id";
     const getItemId = () => localStorage.getItem(ITEM_KEY);
@@ -146,12 +162,22 @@
     // Sincronizar
     card.querySelector("#btn-nu-sync").addEventListener("click", async () => {
     try {
-        await waitForState(); // <<< garante que state existe
+        await waitForState();
 
         const itemId = getItemId();
         if (!itemId) return alert("Primeiro clique em 'Conectar Nubank'.");
 
-        const txs = await sync(itemId);
+        const from = card.querySelector("#nu-from")?.value || "";
+        const to = card.querySelector("#nu-to")?.value || "";
+
+        if ((from && !to) || (!from && to)) {
+        return alert("Preencha as duas datas (De e Até) ou deixe ambas vazias.");
+        }
+        if (from && to && from > to) {
+        return alert("A data 'De' não pode ser maior que a data 'Até'.");
+        }
+
+        const txs = await sync(itemId, from || null, to || null);
         importTransactions(txs, "nubank");
     } catch (e) {
         alert(e.message || String(e));
