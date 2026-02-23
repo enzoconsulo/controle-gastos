@@ -29,6 +29,7 @@ const DEFAULT = {
 };
 
 let state = loadState();
+window.state = state;
 
 /* helpers básicos */
 function money(v){ v = Number(v||0); return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
@@ -98,7 +99,7 @@ function loadState(){
   copy.meta.baseMonth = billingMonthOf(todayISO());
   return copy;
 }
-function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function saveState(){ window.state = state; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
 function computeMonthFromOffset(offset){
   const base = state.meta.baseMonth || billingMonthOf(todayISO());
@@ -1409,6 +1410,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(resetBtn) resetBtn.addEventListener('click', ()=>{
     if(!confirm('Zerar tudo? Isso apaga saldos, guardado, crédito e todos os logs.')) return;
     state = JSON.parse(JSON.stringify(DEFAULT));
+    window.state = state;
     state.meta.baseMonth = billingMonthOf(todayISO());
     state.meta.activeOffset = 0;
     saveState();
