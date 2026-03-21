@@ -1142,50 +1142,68 @@ function openSellFormForProduct(productId, anchorBtn){
 function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   const prod = state.products.find(p=>p.id===productId);
   const fil = state.filaments.find(f=>f.id===filamentId);
-  const userAccount = state.accounts.find(a=>a.id===accountId); // selecionada no formulário (não usada para destino)
-  if(!prod || !fil || !userAccount) { alert('Produto/filamento/conta inválidos.'); return; }
+  const userAccount = state.accounts.find(a=>a.id===accountId);
+  if(!prod || !fil || !userAccount) {
+    alert('Produto/filamento/conta inválidos.');
+    return;
+  }
 
-  const totalFilNeeded = Number(prod.fil_g || 0) * Number(qty || 0);
+  qty = Number(qty || 0);
+  pricePerUnit = Number(pricePerUnit || 0);
+
+  const totalFilNeeded = Number(prod.fil_g || 0) * qty;
   if(Number(fil.weight || 0) < totalFilNeeded){
     if(!confirm(`Filamento selecionado tem ${Number(fil.weight||0).toFixed(2)} g — precisa de ${totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return;
   }
 
-  // cálculo determinístico do custo por grama usando initialWeight (fixo)
+  // custo do filamento
   const initial = Number(fil.initialWeight || fil.weight || 0);
   const priceRolo = Number(fil.price || 0);
-  const pricePerGram = (initial > 0) ? (priceRolo / initial) : 0;
+  const pricePerGram = initial > 0 ? (priceRolo / initial) : 0;
   const materialCostUnit = Number(prod.fil_g || 0) * pricePerGram;
-  const materialCostTotal = materialCostUnit * Number(qty || 0);
+  const materialCostTotal = materialCostUnit * qty;
 
-  // taxas Shopee (fixas definidas no topo)
-  const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * Number(pricePerUnit || 0);
-  const feeTotal = feePerUnit * Number(qty || 0);
+  // custo de energia/tempo
+  const energyCostUnit = Number(prod.hours || 0) * Number(prod.energy_h || 0);
+  const energyCostTotal = energyCostUnit * qty;
 
-  // montantes
-  const amountGross = Number(pricePerUnit || 0) * Number(qty || 0);
+  // custo de embalagem
+  const packagingCostUnit = Number(prod.pack || 0);
+  const packagingCostTotal = packagingCostUnit * qty;
+
+  // taxa Shopee
+  const feePerUnit = Number(SHOPEE_FEE_FIXED) + (Number(SHOPEE_FEE_PCT) * Number(pricePerUnit || 0));
+  const feeTotal = feePerUnit * qty;
+
+  // valores
+  const amountGross = Number(pricePerUnit || 0) * qty;
   const netReceived = amountGross - feeTotal;
-  const profit = netReceived - materialCostTotal; // sem energia/embalagem na sua versão (podemos acrescentar depois)
+  const totalCost = materialCostTotal + energyCostTotal + packagingCostTotal;
+  const profit = netReceived - totalCost;
 
-  // subtrai filamento do estoque (mantém f.weight como restante)
+  // baixa estoque
   fil.weight = Number(fil.weight || 0) - totalFilNeeded;
 
-  // registra venda no impSales incluindo cálculos (para exibição)
+  // registra venda
   const sale = {
     id: Date.now().toString(),
     date: todayISO(),
     productId,
     filamentId,
-    accountId: 'shopee', // por padrão, a entrada vai para Shopee (fluxo Shopee -> Nubank manual)
+    accountId: 'shopee',
     qty,
     amountGross,
     feeTotal,
     netReceived,
     materialCost: materialCostTotal,
+    energyCost: energyCostTotal,
+    packagingCost: packagingCostTotal,
+    totalCost,
     profit
   };
   state.impSales.push(sale);
 
-  // 1) cria uma entrada bruta na conta Shopee (entrada)
+  // entrada bruta na Shopee
   const saleEntry = {
     id: 'imp3d-sale-' + Date.now().toString(),
     date: todayISO(),
@@ -1199,7 +1217,7 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   applyExpenseEffects(saleEntry);
   state.expenses.push(saleEntry);
 
-  // 2) registra a taxa da Shopee como despesa na conta Shopee (reduz o saldo dela)
+  // taxa Shopee
   if(feeTotal > 0){
     const feeExp = {
       id: 'imp3d-shfee-' + Date.now().toString(),
@@ -1215,7 +1233,7 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
     state.expenses.push(feeExp);
   }
 
-  // 3) registra o custo do material como despesa na conta imp3d (reduz saldo imp3d)
+  // custo material
   if(materialCostTotal > 0){
     const matExp = {
       id: 'imp3d-mat-' + Date.now().toString(),
@@ -1231,9 +1249,50 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
     state.expenses.push(matExp);
   }
 
+  // custo energia
+  if(energyCostTotal > 0){
+    const energyExp = {
+      id: 'imp3d-energy-' + Date.now().toString(),
+      date: todayISO(),
+      desc: `Custo energia ${prod.name} x${qty}`,
+      amount: Number(energyCostTotal),
+      type: 'saldo',
+      accountId: 'imp3d',
+      method: 'custo energia',
+      category: 'custo_energia'
+    };
+    applyExpenseEffects(energyExp);
+    state.expenses.push(energyExp);
+  }
+
+  // custo embalagem
+  if(packagingCostTotal > 0){
+    const packExp = {
+      id: 'imp3d-pack-' + Date.now().toString(),
+      date: todayISO(),
+      desc: `Custo embalagem ${prod.name} x${qty}`,
+      amount: Number(packagingCostTotal),
+      type: 'saldo',
+      accountId: 'imp3d',
+      method: 'custo embalagem',
+      category: 'custo_embalagem'
+    };
+    applyExpenseEffects(packExp);
+    state.expenses.push(packExp);
+  }
+
   saveState();
   updateAll();
-  alert(`Venda registrada — bruto ${money(amountGross)}, taxa ${money(feeTotal)}, recebido ${money(netReceived)}, custo material ${money(materialCostTotal)}, lucro ${money(profit)}.`);
+
+  alert(
+    `Venda registrada — bruto ${money(amountGross)}, ` +
+    `taxa ${money(feeTotal)}, ` +
+    `recebido ${money(netReceived)}, ` +
+    `material ${money(materialCostTotal)}, ` +
+    `energia ${money(energyCostTotal)}, ` +
+    `embalagem ${money(packagingCostTotal)}, ` +
+    `lucro ${money(profit)}.`
+  );
 }
 
 /* render vendas - agora mostra colunas com cálculo e soma total recebido / lucro */
@@ -1314,18 +1373,38 @@ function handleAddProduct(){
   const name = document.getElementById('prod-name').value.trim();
   const hours = Number(document.getElementById('prod-hours').value || 0);
   const fil_g = Number(document.getElementById('prod-fil-g').value || 0);
+  const energy_h = Number(document.getElementById('prod-energy-h').value || 0);
+  const pack = Number(document.getElementById('prod-pack').value || 0);
   const price = Number(document.getElementById('prod-price').value || 0);
   const desc = document.getElementById('prod-desc').value.trim();
 
-  if(!name || fil_g <= 0 || price <= 0){ alert('Nome, filamento por unidade (g) e preço são obrigatórios e devem ser válidos.'); return; }
-  const p = { id: Date.now().toString(), name, hours, fil_g: Number(fil_g), price: Number(price), desc };
+  if(!name || fil_g <= 0 || price <= 0){
+    alert('Nome, filamento por unidade (g) e preço são obrigatórios e devem ser válidos.');
+    return;
+  }
+
+  const p = {
+    id: Date.now().toString(),
+    name,
+    hours: Number(hours),
+    fil_g: Number(fil_g),
+    energy_h: Number(energy_h),
+    pack: Number(pack),
+    price: Number(price),
+    desc
+  };
+
   state.products.push(p);
   saveState();
-  document.getElementById('prod-name').value='';
-  document.getElementById('prod-hours').value='';
-  document.getElementById('prod-fil-g').value='';
-  document.getElementById('prod-price').value='';
-  document.getElementById('prod-desc').value='';
+
+  document.getElementById('prod-name').value = '';
+  document.getElementById('prod-hours').value = '';
+  document.getElementById('prod-fil-g').value = '';
+  document.getElementById('prod-energy-h').value = '';
+  document.getElementById('prod-pack').value = '';
+  document.getElementById('prod-price').value = '';
+  document.getElementById('prod-desc').value = '';
+
   updateAll();
 }
 
