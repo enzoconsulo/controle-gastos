@@ -1022,7 +1022,12 @@ function renderProducts(){
     card.innerHTML = `
       <div>
         <div style="font-weight:700">${prod.name}</div>
-        <div style="font-size:0.85rem;color:var(--muted);">Horas: ${prod.hours} — Filamento por unidade: ${Number(prod.fil_g).toFixed(2)} g</div>
+        <div style="font-size:0.85rem;color:var(--muted);">
+          Horas: ${Number(prod.hours || 0).toFixed(2)}
+          — Filamento por unidade: ${Number(prod.fil_g).toFixed(2)} g
+          — Custo/h: ${money(prod.energy_h || 0)}
+          — Embalagem: ${money(prod.pack || 0)}
+        </div>
         <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc||''}</div>
       </div>
       <div style="text-align:right">
