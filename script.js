@@ -1157,6 +1157,7 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   pricePerUnit = Number(pricePerUnit || 0);
 
   const totalFilNeeded = Number(prod.fil_g || 0) * qty;
+
   if(Number(fil.weight || 0) < totalFilNeeded){
     if(!confirm(`Filamento selecionado tem ${Number(fil.weight||0).toFixed(2)} g — precisa de ${totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return;
   }
@@ -1168,23 +1169,25 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   const materialCostUnit = Number(prod.fil_g || 0) * pricePerGram;
   const materialCostTotal = materialCostUnit * qty;
 
-  // custo de energia/tempo
-  const energyCostUnit = Number(prod.hours || 0) * Number(prod.energy_h || 0);
-  const energyCostTotal = energyCostUnit * qty;
+  // custo por hora
+  const hourlyCostUnit = Number(prod.hours || 0) * Number(prod.energy_h || 0);
+  const hourlyCostTotal = hourlyCostUnit * qty;
 
   // custo de embalagem
   const packagingCostUnit = Number(prod.pack || 0);
   const packagingCostTotal = packagingCostUnit * qty;
 
-  // taxa Shopee
-  const feePerUnit = Number(SHOPEE_FEE_FIXED) + (Number(SHOPEE_FEE_PCT) * Number(pricePerUnit || 0));
+  // reinvestimento obrigatório
+  const mandatoryReinvest = materialCostTotal + hourlyCostTotal + packagingCostTotal;
+
+  // taxas Shopee
+  const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * Number(pricePerUnit || 0);
   const feeTotal = feePerUnit * qty;
 
   // valores
   const amountGross = Number(pricePerUnit || 0) * qty;
   const netReceived = amountGross - feeTotal;
-  const totalCost = materialCostTotal + energyCostTotal + packagingCostTotal;
-  const profit = netReceived - totalCost;
+  const profit = netReceived - mandatoryReinvest;
 
   // baixa estoque
   fil.weight = Number(fil.weight || 0) - totalFilNeeded;
@@ -1201,9 +1204,9 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
     feeTotal,
     netReceived,
     materialCost: materialCostTotal,
-    energyCost: energyCostTotal,
+    hourlyCost: hourlyCostTotal,
     packagingCost: packagingCostTotal,
-    totalCost,
+    mandatoryReinvest,
     profit
   };
   state.impSales.push(sale);
@@ -1254,20 +1257,20 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
     state.expenses.push(matExp);
   }
 
-  // custo energia
-  if(energyCostTotal > 0){
-    const energyExp = {
-      id: 'imp3d-energy-' + Date.now().toString(),
+  // custo por hora
+  if(hourlyCostTotal > 0){
+    const hourExp = {
+      id: 'imp3d-hour-' + Date.now().toString(),
       date: todayISO(),
-      desc: `Custo energia ${prod.name} x${qty}`,
-      amount: Number(energyCostTotal),
+      desc: `Custo hora ${prod.name} x${qty}`,
+      amount: Number(hourlyCostTotal),
       type: 'saldo',
       accountId: 'imp3d',
-      method: 'custo energia',
-      category: 'custo_energia'
+      method: 'custo hora',
+      category: 'custo_hora'
     };
-    applyExpenseEffects(energyExp);
-    state.expenses.push(energyExp);
+    applyExpenseEffects(hourExp);
+    state.expenses.push(hourExp);
   }
 
   // custo embalagem
@@ -1290,13 +1293,15 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   updateAll();
 
   alert(
-    `Venda registrada — bruto ${money(amountGross)}, ` +
-    `taxa ${money(feeTotal)}, ` +
-    `recebido ${money(netReceived)}, ` +
-    `material ${money(materialCostTotal)}, ` +
-    `energia ${money(energyCostTotal)}, ` +
-    `embalagem ${money(packagingCostTotal)}, ` +
-    `lucro ${money(profit)}.`
+    `Venda registrada.\n` +
+    `Bruto: ${money(amountGross)}\n` +
+    `Taxa Shopee: ${money(feeTotal)}\n` +
+    `Líquido recebido: ${money(netReceived)}\n` +
+    `Reinvestimento obrigatório: ${money(mandatoryReinvest)}\n` +
+    ` - Filamento: ${money(materialCostTotal)}\n` +
+    ` - Custo por hora: ${money(hourlyCostTotal)}\n` +
+    ` - Embalagem: ${money(packagingCostTotal)}\n` +
+    `Lucro real: ${money(profit)}`
   );
 }
 
@@ -1305,32 +1310,46 @@ function renderImpSales(){
   const tbody = document.getElementById('imp3d-sales-body');
   if(!tbody) return;
   tbody.innerHTML = '';
+
   const arr = [...state.impSales].sort((a,b)=> a.date < b.date ? 1 : -1);
+
   let totalReceived = 0;
   let totalProfit = 0;
+  let totalMandatoryReinvest = 0;
+
   arr.forEach(s=>{
     const prod = state.products.find(p=>p.id===s.productId) || {name:s.productId};
     const fil = state.filaments.find(f=>f.id===s.filamentId) || {color:s.filamentId};
+
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${s.date}</td>
-                    <td>${prod.name}</td>
-                    <td>${fil.color||fil.id}</td>
-                    <td>${s.qty}</td>
-                    <td>${money(s.amountGross||0)}</td>
-                    <td>${money(s.feeTotal||0)}</td>
-                    <td>${money(s.netReceived||0)}</td>
-                    <td>${money(s.materialCost||0)}</td>
-                    <td>${money(s.profit||0)}</td>`;
+    tr.innerHTML = `
+      <td>${s.date}</td>
+      <td>${prod.name}</td>
+      <td>${fil.color||fil.id}</td>
+      <td>${s.qty}</td>
+      <td>${money(s.amountGross||0)}</td>
+      <td>${money(s.feeTotal||0)}</td>
+      <td>${money(s.netReceived||0)}</td>
+      <td>${money(s.materialCost||0)}</td>
+      <td>${money(s.hourlyCost||0)}</td>
+      <td>${money(s.packagingCost||0)}</td>
+      <td>${money(s.mandatoryReinvest||0)}</td>
+      <td>${money(s.profit||0)}</td>
+    `;
     tbody.appendChild(tr);
+
     totalReceived += Number(s.netReceived || 0);
     totalProfit += Number(s.profit || 0);
+    totalMandatoryReinvest += Number(s.mandatoryReinvest || 0);
   });
 
-  // atualizar resumo Impressora3D (totais)
   const recEl = document.getElementById('imp3d-total-received');
   const profEl = document.getElementById('imp3d-total-profit');
+  const reinvEl = document.getElementById('imp3d-total-reinvest');
+
   if(recEl) recEl.textContent = money(totalReceived);
   if(profEl) profEl.textContent = money(totalProfit);
+  if(reinvEl) reinvEl.textContent = money(totalMandatoryReinvest);
 }
 
 /* render perdas (mantido) */
