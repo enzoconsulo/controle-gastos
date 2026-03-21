@@ -71,6 +71,12 @@ function loadState(){
       if(!s.investments) s.investments = [];
       if(!s.filaments) s.filaments = [];
       if(!s.products) s.products = [];
+      if(Array.isArray(s.products)){
+        s.products.forEach(p => {
+          if(p && p.energy_h === undefined) p.energy_h = 0;
+          if(p && p.pack === undefined) p.pack = 0;
+        });
+      }
       if(!s.impSales) s.impSales = [];
       if(!s.impLosses) s.impLosses = [];
       // garantir contas imp3d / shopee em states antigos
@@ -170,6 +176,9 @@ function renderAccountsTable(){
   const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
   const imp3dBalanceEl = document.getElementById('imp3d-acc-balance');
   if(imp3dBalanceEl) imp3dBalanceEl.textContent = imp3dAcc ? money(imp3dAcc.saldo) : '—';
+  const shopeeAcc = state.accounts.find(a=>a.id==='shopee');
+  const shopeeBalanceEl = document.getElementById('shopee-acc-balance');
+  if(shopeeBalanceEl) shopeeBalanceEl.textContent = shopeeAcc ? money(shopeeAcc.saldo) : '—';
 }
 
 function renderYellow(){
