@@ -330,3 +330,66 @@ tbody td{ padding:8px; border-bottom:1px solid rgba(15,23,42,0.9); color:var(--t
 
 /* protect charts from expanding cards unexpectedly */
 canvas{ max-width:100% !important; height:100% !important; display:block; }
+
+/* ===== Ajustes mobile da aba Impressora3D ===== */
+@media (max-width: 700px){
+  #tab-imp3d .panel-grid{
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  #tab-imp3d .form-grid{
+    grid-template-columns: 1fr;
+  }
+
+  #tab-imp3d .panel-card{
+    overflow: hidden;
+  }
+
+  #tab-imp3d .yellow-grid{
+    padding: 10px;
+  }
+
+  #tab-imp3d .y-row{
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  #tab-imp3d .y-row span,
+  #tab-imp3d .y-row strong{
+    font-size: 0.85rem;
+  }
+
+  #tab-imp3d .table-wrapper{
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #tab-imp3d table{
+    min-width: 900px;
+  }
+
+  #tab-imp3d [id^="imp3d-sell-form-"]{
+    overflow-x: auto;
+  }
+
+  #tab-imp3d [id^="imp3d-sell-form-"] > div:first-child{
+    min-width: 680px;
+  }
+
+  #tab-imp3d .imp3d-sell-preview{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  #tab-imp3d .imp3d-sell-preview div{
+    min-width: 0;
+  }
+
+  #tab-imp3d .btn,
+  #tab-imp3d .btn-primary{
+    width: 100%;
+  }
+}
