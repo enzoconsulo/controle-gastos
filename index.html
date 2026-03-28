@@ -149,12 +149,19 @@
             <option value="credito">Gasto no crédito</option>
             <option value="vr">Gasto no VR (Caju)</option>
             <option value="entrada">Entrada</option>
+            <option value="transferencia">Transferir para outra conta</option>
           </select>
         </div>
         <div class="form-field">
-          <label>Banco / conta</label>
+          <label>Conta origem</label>
           <select id="exp-account"></select>
         </div>
+      
+        <div class="form-field" id="transfer-destination-wrap" style="display:none;">
+          <label>Conta destino</label>
+          <select id="exp-transfer-account"></select>
+        </div>
+      
         <div class="form-field">
           <label>Categoria</label>
           <select id="exp-category">
