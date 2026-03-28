@@ -12,6 +12,7 @@ const DEFAULT = {
     { id: "sicoob", name: "Sicoob", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "itau", name: "Itau", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "caju", name: "Caju", saldo: 0, guardado: 0, credit_total: 0 },
+    { id: "mercado_pago", name: "Mercado Pago", saldo: 0, guardado: 0, credit_total: 0 },
     // contas para Impressora3D
     { id: "imp3d", name: "imp3d", saldo: 0, guardado: 0, credit_total: 0 },
     { id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 }
@@ -82,8 +83,10 @@ function loadState(){
       // garantir contas imp3d / shopee em states antigos
       const hasImp3d = (s.accounts || []).some(a=>a.id === 'imp3d');
       const hasShopee = (s.accounts || []).some(a=>a.id === 'shopee');
+      const hasMercadoPago = (s.accounts || []).some(a => a.id === 'mercado_pago');
       if(!hasImp3d) s.accounts.push({ id: "imp3d", name: "imp3d", saldo: 0, guardado: 0, credit_total: 0 });
       if(!hasShopee) s.accounts.push({ id: "shopee", name: "Shopee", saldo: 0, guardado: 0, credit_total: 0 });
+      if(!hasMercadoPago) s.accounts.push({ id: "mercado_pago", name: "Mercado Pago", saldo: 0, guardado: 0, credit_total: 0 });
 
       // --- compatibilidade: se filamento não tem initialWeight, define igual ao peso atual
       if(Array.isArray(s.filaments)){
@@ -328,27 +331,51 @@ function renderEntradaPie(){
 /* selects & editable */
 function populateAccountSelects(){
   const sel = document.getElementById('exp-account');
+  const selTransfer = document.getElementById('exp-transfer-account');
   const selLog = document.getElementById('log-account-filter');
   const selInvest = document.getElementById('invest-account');
   const boxSel = document.getElementById('box-account');
 
   if(sel) sel.innerHTML='';
+  if(selTransfer) selTransfer.innerHTML='';
   if(selLog) selLog.innerHTML='<option value="all">Todas</option>';
   if(selInvest) selInvest.innerHTML='';
   if(boxSel) boxSel.innerHTML='';
 
   state.accounts.forEach(a=>{
     if(sel){
-      const o=document.createElement('option'); o.value=a.id; o.textContent=a.name; sel.appendChild(o);
+      const o=document.createElement('option');
+      o.value=a.id;
+      o.textContent=a.name;
+      sel.appendChild(o);
     }
+
+    if(selTransfer){
+      const oT=document.createElement('option');
+      oT.value=a.id;
+      oT.textContent=a.name;
+      selTransfer.appendChild(oT);
+    }
+
     if(selLog){
-      const o2=document.createElement('option'); o2.value=a.id; o2.textContent=a.name; selLog.appendChild(o2);
+      const o2=document.createElement('option');
+      o2.value=a.id;
+      o2.textContent=a.name;
+      selLog.appendChild(o2);
     }
+
     if(selInvest){
-      const o3=document.createElement('option'); o3.value=a.id; o3.textContent=a.name; selInvest.appendChild(o3);
+      const o3=document.createElement('option');
+      o3.value=a.id;
+      o3.textContent=a.name;
+      selInvest.appendChild(o3);
     }
+
     if(boxSel){
-      const o4=document.createElement('option'); o4.value=a.id; o4.textContent=a.name; boxSel.appendChild(o4);
+      const o4=document.createElement('option');
+      o4.value=a.id;
+      o4.textContent=a.name;
+      boxSel.appendChild(o4);
     }
   });
 
@@ -356,20 +383,31 @@ function populateAccountSelects(){
   if(inicioCredits){
     inicioCredits.innerHTML = '';
     state.accounts.forEach((a, idx) => {
-      const card = document.createElement('div'); card.className = 'account-card';
+      const card = document.createElement('div');
+      card.className = 'account-card';
       card.innerHTML = `<h4>${a.name}</h4>
         <div class="account-row"><label>Crédito</label><input data-acc="${idx}" data-field="credit_total" type="number" step="0.01" value="${a.credit_total||0}" /></div>`;
       inicioCredits.appendChild(card);
     });
+
     inicioCredits.querySelectorAll('input').forEach(inp=>{
       inp.addEventListener('input', e=>{
         const idx = Number(e.target.dataset.acc);
         const field = e.target.dataset.field;
         state.accounts[idx][field] = Number(e.target.value || 0);
-        saveState(); updateAll();
+        saveState();
+        updateAll();
       });
     });
   }
+
+  const vrInput = document.getElementById('inicio-vr-total');
+  const entInput = document.getElementById('inicio-entrada-total');
+  const credInput = document.getElementById('inicio-credit-global');
+  if(vrInput) vrInput.value = state.totals.vr_total || 0;
+  if(entInput) entInput.value = state.totals.entrada || 0;
+  if(credInput) credInput.value = state.totals.credito_total || 0;
+}
 
   const vrInput = document.getElementById('inicio-vr-total');
   const entInput = document.getElementById('inicio-entrada-total');
@@ -534,8 +572,15 @@ function renderLogTable(){
   arr.sort((a,b)=> a.date < b.date ? 1 : -1);
   arr.forEach(exp=>{
     const acc = state.accounts.find(a=>a.id===exp.accountId);
+    const destAcc = state.accounts.find(a=>a.id===exp.transferToAccountId);
+    
+    let contaTexto = acc ? acc.name : exp.accountId;
+    if(exp.type === 'transferencia' && destAcc){
+      contaTexto = `${contaTexto} → ${destAcc.name}`;
+    }
+    
     const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${exp.date}</td><td>${exp.desc||''}</td><td>${acc?acc.name:exp.accountId}</td><td>${exp.type}</td><td>${exp.category||''}</td><td>${money(exp.amount)}</td><td>${exp.method||''}</td><td><button data-id="${exp.id}" class="btn small del">Excluir</button></td>`;
+    tr.innerHTML = `<td>${exp.date}</td><td>${exp.desc||''}</td><td>${contaTexto}</td><td>${exp.type}</td><td>${exp.category||''}</td><td>${money(exp.amount)}</td><td>${exp.method||''}</td><td><button data-id="${exp.id}" class="btn small del">Excluir</button></td>`;
     tbody.appendChild(tr);
   });
 
@@ -563,6 +608,17 @@ function applyExpenseEffects(exp){
     }
   }
 
+  if(exp.type === 'transferencia'){
+    const fromAcc = state.accounts.find(a => a.id === exp.accountId);
+    const toAcc = state.accounts.find(a => a.id === exp.transferToAccountId);
+
+    if(!fromAcc || !toAcc) return;
+
+    fromAcc.saldo = Number(fromAcc.saldo || 0) - Number(exp.amount || 0);
+    toAcc.saldo = Number(toAcc.saldo || 0) + Number(exp.amount || 0);
+    return;
+  }
+
   const acc = state.accounts.find(a=>a.id===exp.accountId);
   if(!acc) return;
 
@@ -581,6 +637,17 @@ function applyExpenseEffects(exp){
 }
 
 function applyExpenseReverse(exp){
+  if(exp.type === 'transferencia'){
+    const fromAcc = state.accounts.find(a => a.id === exp.accountId);
+    const toAcc = state.accounts.find(a => a.id === exp.transferToAccountId);
+
+    if(!fromAcc || !toAcc) return;
+
+    fromAcc.saldo = Number(fromAcc.saldo || 0) + Number(exp.amount || 0);
+    toAcc.saldo = Number(toAcc.saldo || 0) - Number(exp.amount || 0);
+    return;
+  }
+
   const acc = state.accounts.find(a=>a.id===exp.accountId);
   if(!acc) return;
 
@@ -640,24 +707,77 @@ function activateTab(tabName){
 /* submit gasto/entrada (mantido) */
 function handleExpenseSubmit(e){
   e.preventDefault();
+
   const date = document.getElementById('exp-date').value || todayISO();
   const desc = document.getElementById('exp-desc').value.trim() || '';
   const amount = Number(document.getElementById('exp-amount').value || 0);
   const type = document.getElementById('exp-type').value;
   const accountId = document.getElementById('exp-account').value;
+  const transferToAccountId = document.getElementById('exp-transfer-account')?.value || '';
   const method = document.getElementById('exp-method').value.trim() || '';
   const category = document.getElementById('exp-category').value || 'outros';
-  if(!amount || amount <= 0){ alert('Valor inválido'); return; }
+
+  if(!amount || amount <= 0){
+    alert('Valor inválido');
+    return;
+  }
 
   if(type === 'credito'){
     const month = getActiveMonth();
     const sums = monthlySumsByAccount(month);
     const total_used = sum(Object.values(sums), x => x.gasto_credito);
     const avail = Number(state.totals.credito_total || 0) - total_used;
+
     if(avail < amount){
       if(!confirm(`Crédito disponível global é ${money(avail)}. Deseja registrar mesmo assim?`)) return;
     }
   }
+
+  if(type === 'transferencia'){
+    if(!transferToAccountId){
+      alert('Selecione a conta destino.');
+      return;
+    }
+
+    if(accountId === transferToAccountId){
+      alert('A conta de origem e destino não podem ser a mesma.');
+      return;
+    }
+
+    const fromAcc = state.accounts.find(a => a.id === accountId);
+    if(fromAcc && Number(fromAcc.saldo || 0) < amount){
+      if(!confirm(`A conta origem possui saldo de ${money(fromAcc.saldo)} e pode ficar negativa. Deseja continuar?`)) return;
+    }
+  }
+
+  const newExp = {
+    id: Date.now().toString(),
+    date,
+    desc,
+    amount,
+    type,
+    accountId,
+    transferToAccountId: type === 'transferencia' ? transferToAccountId : '',
+    method,
+    category
+  };
+
+  applyExpenseEffects(newExp);
+
+  if(!Array.isArray(state.expenses)) state.expenses = [];
+  state.expenses.push(newExp);
+
+  saveState();
+  updateAll();
+
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-method').value = '';
+  const transferSel = document.getElementById('exp-transfer-account');
+  if(transferSel) transferSel.value = '';
+
+  activateTab('dashboard');
+}
 
   const newExp = { id: Date.now().toString(), date, desc, amount, type, accountId, method, category };
   applyExpenseEffects(newExp);
@@ -1478,21 +1598,38 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const expForm = document.getElementById('expense-form');
   if(expForm) expForm.addEventListener('submit', handleExpenseSubmit);
 
-  // Auto selecionar Caju quando tipo = "vr"
+    // Auto selecionar Caju quando tipo = "vr"
+  // e mostrar/ocultar conta destino quando tipo = "transferencia"
   const expTypeSel = document.getElementById('exp-type');
   const expAccountSel = document.getElementById('exp-account');
-  if (expTypeSel && expAccountSel) {
-    expTypeSel.addEventListener('change', () => {
-      if (expTypeSel.value === 'vr') {
-        const caju = state.accounts.find(a =>
-          a.name.toLowerCase().includes('caju') ||
-          a.name.toLowerCase().includes('vr')
-        );
-        if (caju) {
-          expAccountSel.value = caju.id;
-        }
+  const expTransferWrap = document.getElementById('transfer-destination-wrap');
+  const expTransferSel = document.getElementById('exp-transfer-account');
+
+  function updateExpenseTypeUI() {
+    if (!expTypeSel || !expAccountSel) return;
+
+    if (expTypeSel.value === 'vr') {
+      const caju = state.accounts.find(a =>
+        a.name.toLowerCase().includes('caju') ||
+        a.name.toLowerCase().includes('vr')
+      );
+      if (caju) {
+        expAccountSel.value = caju.id;
       }
-    });
+    }
+
+    if (expTransferWrap) {
+      expTransferWrap.style.display = expTypeSel.value === 'transferencia' ? 'block' : 'none';
+    }
+
+    if (expTypeSel.value !== 'transferencia' && expTransferSel) {
+      expTransferSel.value = '';
+    }
+  }
+
+  if (expTypeSel) {
+    expTypeSel.addEventListener('change', updateExpenseTypeUI);
+    updateExpenseTypeUI();
   }
 
   // início do mês buttons
