@@ -409,14 +409,6 @@ function populateAccountSelects(){
   if(credInput) credInput.value = state.totals.credito_total || 0;
 }
 
-  const vrInput = document.getElementById('inicio-vr-total');
-  const entInput = document.getElementById('inicio-entrada-total');
-  const credInput = document.getElementById('inicio-credit-global');
-  if(vrInput) vrInput.value = state.totals.vr_total || 0;
-  if(entInput) entInput.value = state.totals.entrada || 0;
-  if(credInput) credInput.value = state.totals.credito_total || 0;
-}
-
 function renderEditableAccounts(){
   const c = document.getElementById('editable-accounts'); 
   if(!c) return;
@@ -775,20 +767,6 @@ function handleExpenseSubmit(e){
   document.getElementById('exp-method').value = '';
   const transferSel = document.getElementById('exp-transfer-account');
   if(transferSel) transferSel.value = '';
-
-  activateTab('dashboard');
-}
-
-  const newExp = { id: Date.now().toString(), date, desc, amount, type, accountId, method, category };
-  applyExpenseEffects(newExp);
-  if(!Array.isArray(state.expenses)) state.expenses = [];
-  state.expenses.push(newExp);
-  saveState();
-  updateAll();
-
-  document.getElementById('exp-amount').value = '';
-  document.getElementById('exp-desc').value = '';
-  document.getElementById('exp-method').value = '';
 
   activateTab('dashboard');
 }
