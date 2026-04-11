@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Impressora3D — Painel</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <link rel="stylesheet" href="imp3d-pages.css"/>
+</head>
+<body class="app-shell">
+  <header class="imp3d-topbar">
+    <a class="imp3d-back" href="../index.html#tab-imp3d">← Voltar</a>
+    <div class="imp3d-page-title">
+      <h2>Impressora 3D</h2>
+      <p>Resumo rápido e navegação entre arquivos</p>
+    </div>
+  </header>
+
+  <main class="wrap app-main imp3d-page">
+    <div class="imp3d-shell">
+      <section class="imp3d-hero">
+        <div class="imp3d-hero-copy">
+          <span class="imp3d-eyebrow">Painel principal</span>
+          <h1 class="panel-title" style="margin:0;">Resumo rápido</h1>
+          <p class="imp3d-hero-text">
+            Use esta página como início da área de Impressora3D. Os arquivos abaixo levam para cada função separada.
+          </p>
+        </div>
+      </section>
+
+      <div class="imp3d-grid">
+        <div class="imp3d-col">
+          <section class="imp3d-folder">
+            <div class="imp3d-folder-head">
+              <div>
+                <span class="imp3d-folder-kicker">Resumo</span>
+                <h3 class="card-title">Visão geral</h3>
+              </div>
+              <span class="imp3d-folder-badge">Atualizado automaticamente</span>
+            </div>
+
+            <div class="yellow-grid imp3d-summary-grid" style="margin-top:8px">
+              <div class="y-row"><span>Total filamentos (g)</span><strong id="imp3d-total-fil">0 g</strong></div>
+              <div class="y-row"><span>Produtos cadastrados</span><strong id="imp3d-count-prod">0</strong></div>
+              <div class="y-row"><span>Conta imp3d</span><strong id="imp3d-acc-balance">—</strong></div>
+              <div class="y-row"><span>Conta Shopee</span><strong id="shopee-acc-balance">—</strong></div>
+            </div>
+
+            <div class="yellow-grid imp3d-summary-grid" style="margin-top:12px">
+              <div class="y-row"><span>Recebido líquido</span><strong id="imp3d-total-received">R$ 0,00</strong></div>
+              <div class="y-row"><span>Reinvestimento obrigatório</span><strong id="imp3d-total-reinvest">R$ 0,00</strong></div>
+              <div class="y-row"><span>Lucro real</span><strong id="imp3d-total-profit">R$ 0,00</strong></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="imp3d-col">
+          <section class="imp3d-folder">
+            <div class="imp3d-folder-head">
+              <div>
+                <span class="imp3d-folder-kicker">Arquivos</span>
+                <h3 class="card-title">Abrir área</h3>
+              </div>
+              <span class="imp3d-folder-badge">Navegação</span>
+            </div>
+
+            <div class="imp3d-action-grid">
+              <div class="action-tile">
+                <a class="btn action-btn" href="filamentos.html">🧵 Filamentos</a>
+                <span class="action-tile-sub">Cadastrar e acompanhar o estoque de rolos.</span>
+              </div>
+              <div class="action-tile">
+                <a class="btn action-btn" href="produtos.html">📦 Produtos</a>
+                <span class="action-tile-sub">Cadastro de itens, custos e preço de venda.</span>
+              </div>
+              <div class="action-tile">
+                <a class="btn action-btn" href="estoque.html">🗂️ Estoque</a>
+                <span class="action-tile-sub">Produzir itens e vender depois.</span>
+              </div>
+              <div class="action-tile">
+                <a class="btn action-btn" href="vendas.html">🧾 Vendas</a>
+                <span class="action-tile-sub">Ver o histórico e os números de vendas.</span>
+              </div>
+              <div class="action-tile">
+                <a class="btn action-btn" href="perdas.html">⚠️ Perdas</a>
+                <span class="action-tile-sub">Retiradas, prejuízos e material perdido.</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../script.js?v=8"></script>
+  <script src="../sync-pluggy-ui.js?v=8"></script>
+</body>
+</html>
