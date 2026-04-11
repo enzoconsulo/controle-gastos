@@ -1292,9 +1292,7 @@ function renderFilaments(){
         alert('Opção inválida.');
       });
     });
-
-  const total = sum(state.filaments, x=>x.weight||0);
-  if(document.getElementById('imp3d-total-fil')) document.getElementById('imp3d-total-fil').textContent = `${total.toFixed(2)} g`;
+  
 }
 
 /* Add filamento (agora grava initialWeight) */
