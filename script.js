@@ -1435,7 +1435,7 @@ function openSellFormForProduct(productId, anchorBtn){
   });
 }
 
-function sellFromStock(stockId, qtyToSell, accountId){
+function sellFromStock(stockId, qtyToSell){
   const stock = state.impStock.find(s => s.id === stockId);
   if(!stock) return alert('Item não encontrado');
 
@@ -1448,11 +1448,12 @@ function sellFromStock(stockId, qtyToSell, accountId){
   const result = processImp3dSale({
     productId: stock.productId,
     filamentId: stock.filamentId,
-    accountId,
+    accountId: 'shopee',
     qty: qtyToSell,
-    pricePerUnit: Number(stock.salePricePerUnit || 0),
+    pricePerUnit: Number(stock.snapshot?.salePricePerUnit || 0),
+    snapshot: stock.snapshot,
     skipFilamentDebit: true,
-    saleLabel: 'estoque'
+    channel: 'estoque'
   });
 
   if(!result) return;
@@ -1633,9 +1634,22 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
   );
 }
 
+function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit){
+  const salePrice = Number(salePricePerUnit || prod.price || 0);
+  const initial = Number(fil.initialWeight || fil.weight || 0);
+  const pricePerGram = initial > 0 ? Number(fil.price || 0) / initial : 0;
+
+  return {
+    salePricePerUnit: salePrice,
+    unitMaterialCost: Number(prod.fil_g || 0) * pricePerGram,
+    unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
+    unitPackagingCost: Number(prod.pack || 0),
+  };
+}
+
 function stockProduct(productId, filamentId, qty){
-  const prod = state.products.find(p=>p.id===productId);
-  const fil = state.filaments.find(f=>f.id===filamentId);
+  const prod = state.products.find(p => p.id === productId);
+  const fil = state.filaments.find(f => f.id === filamentId);
   if(!prod || !fil) return alert('Produto ou filamento inválido');
 
   qty = Number(qty || 0);
@@ -1647,11 +1661,9 @@ function stockProduct(productId, filamentId, qty){
     if(!confirm('Filamento insuficiente. Deseja permitir negativo?')) return;
   }
 
-  fil.weight = Number(fil.weight || 0) - totalFilNeeded;
+  const snapshot = buildImp3dUnitSnapshot(prod, fil, prod.price);
 
-  const initial = Number(fil.initialWeight || fil.weight || 0);
-  const priceRolo = Number(fil.price || 0);
-  const pricePerGram = initial > 0 ? (priceRolo / initial) : 0;
+  fil.weight = Number(fil.weight || 0) - totalFilNeeded;
 
   state.impStock.push({
     id: Date.now().toString(),
@@ -1659,10 +1671,7 @@ function stockProduct(productId, filamentId, qty){
     productId,
     filamentId,
     qty,
-    salePricePerUnit: Number(prod.price || 0),
-    unitMaterialCost: Number(prod.fil_g || 0) * pricePerGram,
-    unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
-    unitPackagingCost: Number(prod.pack || 0)
+    snapshot
   });
 
   saveState();
@@ -1719,11 +1728,11 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   const result = processImp3dSale({
     productId,
     filamentId,
-    accountId,
+    accountId: 'shopee',
     qty,
     pricePerUnit,
     skipFilamentDebit: false,
-    saleLabel: 'normal'
+    channel: 'normal'
   });
 
   if(!result) return;
@@ -1750,9 +1759,7 @@ function renderImpStock(){
 
   el.innerHTML = '';
 
-  const grouped = getGroupedStock();
-
-  if(!grouped.length){
+  if(!state.impStock.length){
     const empty = document.createElement('p');
     empty.className = 'muted';
     empty.textContent = 'Nenhum item em estoque.';
@@ -1760,26 +1767,24 @@ function renderImpStock(){
     return;
   }
 
-  grouped.forEach(g=>{
-    const prod = state.products.find(p=>p.id===g.productId) || {name:'?'};
-    const totalCost = g.materialCost + g.hourlyCost + g.packagingCost;
-    const costPerUnit = g.qty > 0 ? totalCost / g.qty : 0;
-
+  state.impStock.forEach(stock=>{
+    const prod = state.products.find(p=>p.id===stock.productId) || {name:'?'};
+    const totalUnitCost = (Number(stock.snapshot?.unitMaterialCost || 0) + Number(stock.snapshot?.unitHourlyCost || 0) + Number(stock.snapshot?.unitPackagingCost || 0));
     const card = document.createElement('div');
     card.className = 'box-card';
     card.style.display = 'flex';
     card.style.justifyContent = 'space-between';
     card.style.alignItems = 'center';
-
     card.innerHTML = `
       <div>
         <div style="font-weight:700">${prod.name}</div>
         <div style="font-size:0.85rem;color:var(--muted);">
-          Qtd: ${g.qty} — Custo médio/un: ${money(costPerUnit)} — Custo total: ${money(totalCost)}
+          Lote: ${stock.id} — Qtd: ${stock.qty} — Custo/un: ${money(totalUnitCost)} — Preço/un: ${money(stock.snapshot?.salePricePerUnit || 0)}
         </div>
       </div>
-      <div style="text-align:right">
-        <button class="btn small sell-stock" data-id="${g.productId}">Vender</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" min="1" max="${stock.qty}" step="1" class="stock-sell-qty" data-id="${stock.id}" value="1" style="width:90px"/>
+        <button class="btn small sell-stock" data-id="${stock.id}">Vender</button>
       </div>
     `;
     el.appendChild(card);
@@ -1787,15 +1792,10 @@ function renderImpStock(){
 
   el.querySelectorAll('.sell-stock').forEach(btn=>{
     btn.addEventListener('click', e=>{
-      const productId = e.target.dataset.id;
-
-      const sellSel = document.getElementById('sell-stock-item');
-      if(sellSel) sellSel.value = productId;
-
-      const qtyInput = document.getElementById('sell-stock-qty');
-      if(qtyInput) qtyInput.focus();
-
-      document.getElementById('tab-imp3d')?.scrollIntoView({ behavior:'smooth', block:'start' });
+      const stockId = e.target.dataset.id;
+      const qtyInput = el.querySelector(`.stock-sell-qty[data-id="${stockId}"]`);
+      const qty = Number(qtyInput?.value || 0);
+      sellFromStock(stockId, qty);
     });
   });
 }
@@ -1954,15 +1954,7 @@ function handleAddProduct(){
   updateAll();
 }
 
-function processImp3dSale({
-  productId,
-  filamentId,
-  accountId,
-  qty,
-  pricePerUnit,
-  skipFilamentDebit = false,
-  saleLabel = 'venda'
-}){
+function processImp3dSale({ productId, filamentId, accountId, qty, pricePerUnit, snapshot, skipFilamentDebit = false, channel = 'normal' }){
   const prod = state.products.find(p => p.id === productId);
   const fil = state.filaments.find(f => f.id === filamentId);
   const acc = state.accounts.find(a => a.id === accountId);
@@ -1980,46 +1972,34 @@ function processImp3dSale({
     return null;
   }
 
+  const snap = snapshot || buildImp3dUnitSnapshot(prod, fil, pricePerUnit);
   const totalFilNeeded = Number(prod.fil_g || 0) * qty;
 
   if(!skipFilamentDebit){
     if(Number(fil.weight || 0) < totalFilNeeded){
       if(!confirm(`Filamento selecionado tem ${Number(fil.weight || 0).toFixed(2)} g — precisa de ${totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return null;
     }
-  }
-
-  const initial = Number(fil.initialWeight || fil.weight || 0);
-  const priceRolo = Number(fil.price || 0);
-  const pricePerGram = initial > 0 ? (priceRolo / initial) : 0;
-
-  const materialCostUnit = Number(prod.fil_g || 0) * pricePerGram;
-  const materialCostTotal = materialCostUnit * qty;
-
-  const hourlyCostUnit = Number(prod.hours || 0) * Number(prod.energy_h || 0);
-  const hourlyCostTotal = hourlyCostUnit * qty;
-
-  const packagingCostUnit = Number(prod.pack || 0);
-  const packagingCostTotal = packagingCostUnit * qty;
-
-  const mandatoryReinvest = materialCostTotal + hourlyCostTotal + packagingCostTotal;
-
-  const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * Number(pricePerUnit || 0);
-  const feeTotal = feePerUnit * qty;
-
-  const amountGross = Number(pricePerUnit || 0) * qty;
-  const netReceived = amountGross - feeTotal;
-  const profit = netReceived - mandatoryReinvest;
-
-  if(!skipFilamentDebit){
     fil.weight = Number(fil.weight || 0) - totalFilNeeded;
   }
+
+  const amountGross = Number(snap.salePricePerUnit || pricePerUnit) * qty;
+  const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * Number(snap.salePricePerUnit || pricePerUnit);
+  const feeTotal = feePerUnit * qty;
+
+  const materialCostTotal = Number(snap.unitMaterialCost || 0) * qty;
+  const hourlyCostTotal = Number(snap.unitHourlyCost || 0) * qty;
+  const packagingCostTotal = Number(snap.unitPackagingCost || 0) * qty;
+
+  const mandatoryReinvest = materialCostTotal + hourlyCostTotal + packagingCostTotal;
+  const netReceived = amountGross - feeTotal;
+  const profit = netReceived - mandatoryReinvest;
 
   const sale = {
     id: Date.now().toString(),
     date: todayISO(),
     productId,
     filamentId,
-    accountId: accountId,
+    accountId: 'shopee',
     qty,
     amountGross,
     feeTotal,
@@ -2029,18 +2009,18 @@ function processImp3dSale({
     packagingCost: packagingCostTotal,
     mandatoryReinvest,
     profit,
-    channel: saleLabel === 'estoque' ? 'estoque' : 'normal'
+    channel
   };
   state.impSales.push(sale);
 
   const saleEntry = {
     id: 'imp3d-sale-' + Date.now().toString(),
     date: todayISO(),
-    desc: `${saleLabel === 'estoque' ? 'Venda estoque' : 'Venda'} ${prod.name} x${qty}`,
+    desc: `${channel === 'estoque' ? 'Venda estoque' : 'Venda'} ${prod.name} x${qty}`,
     amount: amountGross,
     type: 'entrada',
-    accountId: accountId,
-    method: saleLabel === 'estoque' ? 'venda estoque' : 'venda impressora3d',
+    accountId: 'shopee',
+    method: channel === 'estoque' ? 'venda estoque' : 'venda impressora3d',
     category: 'impressora3d'
   };
   applyExpenseEffects(saleEntry);
@@ -2053,7 +2033,7 @@ function processImp3dSale({
       desc: `Taxa Shopee — ${prod.name} x${qty}`,
       amount: feeTotal,
       type: 'saldo',
-      accountId: accountId,
+      accountId: 'shopee',
       method: 'taxa_shopee',
       category: 'taxa_plataforma'
     };
