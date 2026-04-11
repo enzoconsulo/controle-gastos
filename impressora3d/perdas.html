@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Impressora3D — Perdas</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <link rel="stylesheet" href="imp3d-pages.css"/>
+</head>
+<body class="app-shell">
+  <header class="imp3d-topbar">
+    <a class="imp3d-back" href="index.html">← Voltar</a>
+    <div class="imp3d-page-title">
+      <h2>Perdas</h2>
+      <p>Prejuízo, retiradas e material perdido</p>
+    </div>
+  </header>
+
+  <main class="wrap app-main imp3d-page">
+    <section class="imp3d-folder">
+      <div class="imp3d-folder-head">
+        <div>
+          <span class="imp3d-folder-kicker">Arquivo 06</span>
+          <h3 class="card-title">⚠️ Perdas / retiradas de filamento</h3>
+        </div>
+        <span class="imp3d-folder-badge">Controle de prejuízo</span>
+      </div>
+
+      <div class="table-wrapper imp3d-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Filamento</th>
+              <th>g</th>
+              <th>Custo (R$)</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody id="imp3d-losses-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../script.js?v=8"></script>
+  <script src="../sync-pluggy-ui.js?v=8"></script>
+</body>
+</html>
