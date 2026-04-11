@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Impressora3D — Vendas</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <link rel="stylesheet" href="imp3d-pages.css"/>
+</head>
+<body class="app-shell">
+  <header class="imp3d-topbar">
+    <a class="imp3d-back" href="index.html">← Voltar</a>
+    <div class="imp3d-page-title">
+      <h2>Vendas</h2>
+      <p>Resumo, histórico e lucro real</p>
+    </div>
+  </header>
+
+  <main class="wrap app-main imp3d-page">
+    <section class="imp3d-folder">
+      <div class="imp3d-folder-head">
+        <div>
+          <span class="imp3d-folder-kicker">Painel rápido</span>
+          <h3 class="card-title">Resumo Impressora3D</h3>
+        </div>
+        <span class="imp3d-folder-badge">Dashboard</span>
+      </div>
+
+      <div class="yellow-grid imp3d-summary-grid" style="margin-top:8px">
+        <div class="y-row"><span>Total filamentos (g)</span><strong id="imp3d-total-fil">0 g</strong></div>
+        <div class="y-row"><span>Produtos cadastrados</span><strong id="imp3d-count-prod">0</strong></div>
+        <div class="y-row"><span>Conta imp3d</span><strong id="imp3d-acc-balance">—</strong></div>
+        <div class="y-row"><span>Conta Shopee</span><strong id="shopee-acc-balance">—</strong></div>
+      </div>
+
+      <div class="yellow-grid imp3d-summary-grid" style="margin-top:12px">
+        <div class="y-row"><span>Recebido líquido</span><strong id="imp3d-total-received">R$ 0,00</strong></div>
+        <div class="y-row"><span>Reinvestimento obrigatório</span><strong id="imp3d-total-reinvest">R$ 0,00</strong></div>
+        <div class="y-row"><span>Lucro real</span><strong id="imp3d-total-profit">R$ 0,00</strong></div>
+      </div>
+    </section>
+
+    <section class="imp3d-folder" style="margin-top:12px">
+      <div class="imp3d-folder-head">
+        <div>
+          <span class="imp3d-folder-kicker">Arquivo 04</span>
+          <h3 class="card-title">🧾 Log de vendas (Impressora3D)</h3>
+        </div>
+        <span class="imp3d-folder-badge">Histórico</span>
+      </div>
+
+      <div class="table-wrapper imp3d-table-wrap">
+        <table class="imp3d-wide-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Produto</th>
+              <th>Filamento</th>
+              <th>Qtd</th>
+              <th>Bruto</th>
+              <th>Taxa</th>
+              <th>Líquido</th>
+              <th>Filamento</th>
+              <th>Custo/hora</th>
+              <th>Embalagem</th>
+              <th>Reinvest.</th>
+              <th>Lucro</th>
+            </tr>
+          </thead>
+          <tbody id="imp3d-sales-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../script.js?v=8"></script>
+  <script src="../sync-pluggy-ui.js?v=8"></script>
+</body>
+</html>
