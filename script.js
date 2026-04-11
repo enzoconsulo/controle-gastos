@@ -27,6 +27,7 @@ const DEFAULT = {
   impSales: [],       // {id,date,productId,filamentId,accountId,qty,amountGross,feeTotal,netReceived,materialCost,profit}
   impLosses: [],      // {id,date,filamentId,grams,cost,reason}
   impExternalSales: [],
+  impStock: [], // {id,date,productId,filamentId,qty,materialCost,hourlyCost,packagingCost}
   meta: { baseMonth: null, activeOffset: 0, lastCreditClosed: null }
 };
 
@@ -82,6 +83,7 @@ function loadState(){
       if(!s.impSales) s.impSales = [];
       if(!s.impLosses) s.impLosses = [];
       if(!s.impExternalSales) s.impExternalSales = [];
+      if(!s.impStock) s.impStock = [];
       // garantir contas imp3d / shopee em states antigos
       const hasImp3d = (s.accounts || []).some(a=>a.id === 'imp3d');
       const hasShopee = (s.accounts || []).some(a=>a.id === 'shopee');
@@ -1243,6 +1245,7 @@ function renderProducts(){
       <div style="text-align:right">
         <div style="font-weight:700">${money(prod.price)}</div>
         <div style="margin-top:8px">
+          <button class="btn small prod-stock" data-id="${prod.id}">Estocar</button>
           <button class="btn small prod-sell" data-id="${prod.id}">Vender</button>
           <button class="btn small prod-del" data-id="${prod.id}">Excluir</button>
         </div>
@@ -1265,6 +1268,20 @@ function renderProducts(){
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
       openSellFormForProduct(id, e.target);
+    });
+  });
+
+  container.querySelectorAll('.prod-stock').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+  
+      const filId = prompt('ID do filamento:');
+      if(!filId) return;
+  
+      const qty = Number(prompt('Quantidade:','1') || 0);
+      if(qty <= 0) return;
+  
+      stockProduct(id, filId, qty);
     });
   });
 
@@ -1351,6 +1368,132 @@ function openSellFormForProduct(productId, anchorBtn){
     sellProduct(productId, filId, accId, qty, price);
     form.remove();
   });
+}
+
+function sellFromStock(stockId, accountId, pricePerUnit){
+  const stock = state.impStock.find(s=>s.id===stockId);
+  if(!stock) return alert('Item não encontrado');
+
+  const prod = state.products.find(p=>p.id===stock.productId);
+  if(!prod) return alert('Produto inválido');
+
+  const qty = stock.qty;
+
+  const amountGross = pricePerUnit * qty;
+
+  // cálculo igual venda externa/shopee, mas sem custo novamente
+  const totalCost = stock.materialCost + stock.hourlyCost + stock.packagingCost;
+
+  const profit = amountGross - totalCost;
+
+  const acc = state.accounts.find(a=>a.id===accountId);
+  if(!acc) return alert('Conta inválida');
+
+  // entrada de dinheiro
+  const entry = {
+    id: 'imp3d-stock-sale-' + Date.now().toString(),
+    date: todayISO(),
+    desc: `Venda estoque ${prod.name}`,
+    amount: amountGross,
+    type: 'entrada',
+    accountId: acc.id,
+    method: 'venda estoque',
+    category: 'impressora3d'
+  };
+  applyExpenseEffects(entry);
+  state.expenses.push(entry);
+
+  // registrar venda
+  state.impSales.push({
+    id: Date.now().toString(),
+    date: todayISO(),
+    productId: stock.productId,
+    filamentId: stock.filamentId,
+    accountId: acc.id,
+    qty,
+    amountGross,
+    feeTotal: 0,
+    netReceived: amountGross,
+    materialCost: stock.materialCost,
+    hourlyCost: stock.hourlyCost,
+    packagingCost: stock.packagingCost,
+    mandatoryReinvest: totalCost,
+    profit,
+    channel: 'estoque'
+  });
+
+  // remover do estoque
+  state.impStock = state.impStock.filter(s=>s.id !== stockId);
+
+  saveState();
+  updateAll();
+
+  alert(`Venda do estoque realizada!\nLucro: ${money(profit)}`);
+}
+
+function stockProduct(productId, filamentId, qty){
+  const prod = state.products.find(p=>p.id===productId);
+  const fil = state.filaments.find(f=>f.id===filamentId);
+  if(!prod || !fil) return alert('Produto ou filamento inválido');
+
+  qty = Number(qty || 0);
+  if(qty <= 0) return alert('Quantidade inválida');
+
+  const totalFilNeeded = Number(prod.fil_g || 0) * qty;
+
+  if(Number(fil.weight || 0) < totalFilNeeded){
+    if(!confirm('Filamento insuficiente. Deseja permitir negativo?')) return;
+  }
+
+  // custo material
+  const pricePerGram = getFilamentPricePerGram(fil);
+  const materialCost = totalFilNeeded * pricePerGram;
+
+  const hourlyCost = (Number(prod.hours || 0) * Number(prod.energy_h || 0)) * qty;
+  const packagingCost = (Number(prod.pack || 0)) * qty;
+
+  // baixa estoque de filamento
+  fil.weight -= totalFilNeeded;
+
+  // registra estoque
+  state.impStock.push({
+    id: Date.now().toString(),
+    date: todayISO(),
+    productId,
+    filamentId,
+    qty,
+    materialCost,
+    hourlyCost,
+    packagingCost
+  });
+
+  // registra custos (igual venda, MAS sem receita)
+  const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
+
+  const pushCost = (desc, amount, category)=>{
+    if(amount <= 0) return;
+    const exp = {
+      id: 'imp3d-stock-' + Date.now().toString(),
+      date: todayISO(),
+      desc,
+      amount,
+      type: 'saldo',
+      accountId: imp3dAcc.id,
+      method: 'produção estoque',
+      category
+    };
+    applyExpenseEffects(exp);
+    state.expenses.push(exp);
+  };
+
+  pushCost(`Produção (material) ${prod.name}`, materialCost, 'custo_material');
+  pushCost(`Produção (hora) ${prod.name}`, hourlyCost, 'custo_hora');
+  pushCost(`Produção (embalagem) ${prod.name}`, packagingCost, 'custo_embalagem');
+
+  saveState();
+  updateAll();
+
+  alert(`Item estocado com sucesso!\nQuantidade: ${qty}`);
 }
 
 /* vendendo: determinístico, registra entradas/despesas nas contas corretas */
@@ -1513,6 +1656,42 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
     ` - Embalagem: ${money(packagingCostTotal)}\n` +
     `Lucro real: ${money(profit)}`
   );
+}
+
+function renderImpStock(){
+  const el = document.getElementById('imp3d-stock-body');
+  if(!el) return;
+
+  el.innerHTML = '';
+
+  state.impStock.forEach(s=>{
+    const prod = state.products.find(p=>p.id===s.productId) || {name:'?'};
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.date}</td>
+      <td>${prod.name}</td>
+      <td>${s.qty}</td>
+      <td>${money(s.materialCost)}</td>
+      <td>
+        <button class="btn small sell-stock" data-id="${s.id}">Vender</button>
+      </td>
+    `;
+    el.appendChild(tr);
+  });
+
+  el.querySelectorAll('.sell-stock').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+
+      const price = Number(prompt('Preço por unidade:','0'));
+      if(!price || price<=0) return;
+
+      const acc = prompt('Conta (id):','nubank') || 'nubank';
+
+      sellFromStock(id, acc, price);
+    });
+  });
 }
 
 /* render vendas - agora mostra colunas com cálculo e soma total recebido / lucro */
@@ -1795,6 +1974,7 @@ function updateAll(){
   renderProducts();
   renderImpSales();
   renderImpLosses();
+  renderImpStock();
 }
 
 /* ---------- FIM DO ARQUIVO ---------- */
