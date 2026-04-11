@@ -1375,17 +1375,13 @@ function renderProducts(){
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
       
-      // 1. Seleciona automaticamente o produto no formulário de produção
-      const stockProdSel = document.getElementById('stock-prod');
-      if (stockProdSel) stockProdSel.value = id;
+      // Verifica se a URL atual já está dentro da pasta 'impressora3d'
+      const inSubFolder = window.location.pathname.includes('/impressora3d/');
       
-      // 2. Foca no campo de quantidade para você só precisar digitar o número
-      const qtyInput = document.getElementById('stock-qty');
-      if (qtyInput) qtyInput.focus();
+      // Se já estiver na pasta, vai direto para o arquivo. Se estiver na raiz, adiciona a pasta.
+      const targetPath = inSubFolder ? 'estoque.html' : 'impressora3d/estoque.html';
       
-      // 3. Rola a tela suavemente até a seção "Estocar produto"
-      const producaoSection = document.getElementById('imp3d-producao');
-      if (producaoSection) producaoSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.location.href = `${targetPath}?prod=${encodeURIComponent(id)}`;
     });
   });
 
