@@ -1371,14 +1371,7 @@ function renderProducts(){
   container.querySelectorAll('.prod-stock').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-  
-      const prodSel = document.getElementById('stock-prod');
-      if(prodSel) prodSel.value = id;
-  
-      const qtyInput = document.getElementById('stock-qty');
-      if(qtyInput) qtyInput.focus();
-  
-      document.getElementById('tab-imp3d')?.scrollIntoView({ behavior:'smooth', block:'start' });
+      window.location.href = `impressora3d/estoque.html?prod=${encodeURIComponent(id)}`;
     });
   });
 
@@ -1754,25 +1747,77 @@ function getGroupedStock(){
   const map = {};
 
   state.impStock.forEach(s => {
+    const qty = Number(s.qty || 0);
+    const unitMaterial = Number(s.snapshot?.unitMaterialCost || 0);
+    const unitHourly = Number(s.snapshot?.unitHourlyCost || 0);
+    const unitPackaging = Number(s.snapshot?.unitPackagingCost || 0);
+    const unitTotalCost = unitMaterial + unitHourly + unitPackaging;
+    const totalCost = unitTotalCost * qty;
+
     if(!map[s.productId]){
       map[s.productId] = {
         productId: s.productId,
         qty: 0,
-        materialCost: 0,
-        hourlyCost: 0,
-        packagingCost: 0,
-        items: []
+        totalCost: 0,
+        lotIds: []
       };
     }
 
-    map[s.productId].qty += Number(s.qty || 0);
-    map[s.productId].materialCost += Number(s.materialCost || 0);
-    map[s.productId].hourlyCost += Number(s.hourlyCost || 0);
-    map[s.productId].packagingCost += Number(s.packagingCost || 0);
-    map[s.productId].items.push(s);
+    map[s.productId].qty += qty;
+    map[s.productId].totalCost += totalCost;
+    map[s.productId].lotIds.push(s.id);
   });
 
   return Object.values(map);
+}
+
+function renderImpStock(){
+  const tbody = document.getElementById('imp3d-stock-body');
+  if(!tbody) return;
+
+  tbody.innerHTML = '';
+  const grouped = getGroupedStock();
+
+  if(!grouped.length){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="5" class="muted">Nenhum item em estoque.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  grouped.forEach(g => {
+    const prod = state.products.find(p => p.id === g.productId) || { name: g.productId };
+    const avgUnit = g.qty > 0 ? (g.totalCost / g.qty) : 0;
+    const firstLot = state.impStock.find(s => s.productId === g.productId);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${prod.name}</td>
+      <td>${g.qty}</td>
+      <td>${money(avgUnit)}</td>
+      <td>${money(g.totalCost)}</td>
+      <td>
+        <button class="btn small stock-open" data-product="${g.productId}" data-lot="${firstLot ? firstLot.id : ''}">
+          Vender
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.stock-open').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const lotId = e.target.dataset.lot || '';
+      const sellSel = document.getElementById('sell-stock-item');
+      if(sellSel && lotId){
+        sellSel.value = lotId;
+      }
+      const qtyInput = document.getElementById('sell-stock-qty');
+      if(qtyInput) qtyInput.focus();
+
+      document.getElementById('imp3d-estoque')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 }
 
 /* export/import especifico Impressora3D (mantido) */
@@ -1781,7 +1826,8 @@ function imp3dExport(){
     filaments: state.filaments,
     products: state.products,
     impSales: state.impSales,
-    impLosses: state.impLosses
+    impLosses: state.impLosses,
+    impStock: state.impStock
   };
   const blob = new Blob([JSON.stringify(data)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
