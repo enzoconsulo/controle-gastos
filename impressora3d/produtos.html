@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Impressora3D — Produtos</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <link rel="stylesheet" href="imp3d-pages.css"/>
+</head>
+<body class="app-shell">
+  <header class="imp3d-topbar">
+    <a class="imp3d-back" href="index.html">← Voltar</a>
+    <div class="imp3d-page-title">
+      <h2>Produtos</h2>
+      <p>Cadastro de itens, custos e preço</p>
+    </div>
+  </header>
+
+  <main class="wrap app-main imp3d-page">
+    <section class="imp3d-folder">
+      <div class="imp3d-folder-head">
+        <div>
+          <span class="imp3d-folder-kicker">Arquivo 02</span>
+          <h3 class="card-title">📦 Produtos (cadastro)</h3>
+        </div>
+        <span class="imp3d-folder-badge">Tabela base</span>
+      </div>
+
+      <p class="panel-subtitle">Cadastre horas de impressão, filamento por unidade, custo de energia e embalagem.</p>
+
+      <div class="form-grid imp3d-form-grid">
+        <div class="form-field">
+          <label>Nome do produto</label>
+          <input id="prod-name" type="text" placeholder="Ex: Miniatura A"/>
+        </div>
+        <div class="form-field">
+          <label>Horas de impressão</label>
+          <input id="prod-hours" type="number" step="0.1" placeholder="Horas"/>
+        </div>
+        <div class="form-field">
+          <label>Filamento por unidade (g)</label>
+          <input id="prod-fil-g" type="number" step="0.01" placeholder="Gramas por peça"/>
+        </div>
+        <div class="form-field">
+          <label>Custo energia (R$/h)</label>
+          <input id="prod-energy-h" type="number" step="0.01" placeholder="Custo por hora (R$)"/>
+        </div>
+        <div class="form-field">
+          <label>Custo embalagem (R$)</label>
+          <input id="prod-pack" type="number" step="0.01" placeholder="Custo embal. por unidade"/>
+        </div>
+        <div class="form-field">
+          <label>Preço de venda (R$)</label>
+          <input id="prod-price" type="number" step="0.01" placeholder="Preço de venda"/>
+        </div>
+        <div class="form-field" style="grid-column:1/-1">
+          <label>Descrição (opcional)</label>
+          <input id="prod-desc" type="text" placeholder="Detalhes do produto"/>
+        </div>
+        <div class="form-actions" style="grid-column:1/-1">
+          <button id="prod-add" class="btn-primary" type="button">Cadastrar produto</button>
+        </div>
+      </div>
+
+      <div class="imp3d-list-head">
+        <h4>Produtos cadastrados</h4>
+        <span class="imp3d-mini-note" id="imp3d-count-prod">0</span>
+      </div>
+      <div id="prod-list" class="imp3d-list"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../script.js?v=8"></script>
+  <script src="../sync-pluggy-ui.js?v=8"></script>
+</body>
+</html>
