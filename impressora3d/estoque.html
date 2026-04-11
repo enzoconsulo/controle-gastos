@@ -92,5 +92,14 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="../script.js?v=8"></script>
   <script src="../sync-pluggy-ui.js?v=8"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const prodId = new URLSearchParams(location.search).get('prod');
+      const sel = document.getElementById('stock-prod');
+      if(prodId && sel){
+        sel.value = prodId;
+      }
+    });
+  </script>
 </body>
 </html>
