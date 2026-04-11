@@ -2209,6 +2209,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 });
 
+function updateImp3dAccountBalances(){
+  const imp3dEl = document.getElementById('imp3d-acc-balance');
+  const shopeeEl = document.getElementById('shopee-acc-balance');
+
+  if(!imp3dEl && !shopeeEl) return;
+
+  const imp3dAcc = state.accounts.find(a => a.id === 'imp3d');
+  const shopeeAcc = state.accounts.find(a => a.id === 'shopee');
+
+  if(imp3dEl){
+    imp3dEl.textContent = imp3dAcc ? money(imp3dAcc.balance || 0) : '—';
+  }
+
+  if(shopeeEl){
+    shopeeEl.textContent = shopeeAcc ? money(shopeeAcc.balance || 0) : '—';
+  }
+}
+
 function updateAll(){
   populateAccountSelects();
   renderEditableAccounts();
@@ -2229,6 +2247,7 @@ function updateAll(){
   renderImpLosses();
   renderImpStock();
   populateImp3dStockSelects();
+  updateImp3dAccountBalances();
 }
 
 /* ---------- FIM DO ARQUIVO ---------- */
