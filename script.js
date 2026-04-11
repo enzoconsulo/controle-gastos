@@ -2036,18 +2036,32 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   const monthIndexEl = document.getElementById('month-index');
   const monthLabelEl = document.getElementById('month-label');
+  const prevMonthBtn = document.getElementById('prev-month');
+  const nextMonthBtn = document.getElementById('next-month');
+  
   function renderMonthIndex(){
-    monthIndexEl.textContent = state.meta.activeOffset;
-    monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset);
+    if(monthIndexEl) monthIndexEl.textContent = state.meta.activeOffset;
+    if(monthLabelEl) monthLabelEl.textContent = computeMonthFromOffset(state.meta.activeOffset);
   }
-  document.getElementById('prev-month').addEventListener('click', ()=>{
-    state.meta.activeOffset = Number(state.meta.activeOffset||0)-1;
-    saveState(); renderMonthIndex(); updateAll();
-  });
-  document.getElementById('next-month').addEventListener('click', ()=>{
-    state.meta.activeOffset = Number(state.meta.activeOffset||0)+1;
-    saveState(); renderMonthIndex(); updateAll();
-  });
+  
+  if(prevMonthBtn){
+    prevMonthBtn.addEventListener('click', ()=>{
+      state.meta.activeOffset = Number(state.meta.activeOffset || 0) - 1;
+      saveState();
+      renderMonthIndex();
+      updateAll();
+    });
+  }
+  
+  if(nextMonthBtn){
+    nextMonthBtn.addEventListener('click', ()=>{
+      state.meta.activeOffset = Number(state.meta.activeOffset || 0) + 1;
+      saveState();
+      renderMonthIndex();
+      updateAll();
+    });
+  }
+  
   renderMonthIndex();
 
   populateAccountSelects();
