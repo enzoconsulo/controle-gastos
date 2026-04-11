@@ -6,6 +6,89 @@
   <meta name="theme-color" content="#0b1020"/>
   <title>Controle de Gastos — Excel Model</title>
   <link rel="stylesheet" href="style.css"/>
+
+  <style>
+    /* Hub iOS da Impressora3D no app principal */
+    .imp3d-home-grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      margin-top:10px;
+    }
+    .imp3d-home-card{
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      padding:14px;
+      min-height:96px;
+      border-radius:22px;
+      text-decoration:none;
+      color:var(--text);
+      background:linear-gradient(180deg, rgba(11,16,32,0.98), rgba(6,10,22,0.98));
+      border:1px solid rgba(148,163,184,0.14);
+      box-shadow:0 12px 26px rgba(0,0,0,0.18);
+      transition:transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .imp3d-home-card:hover{
+      transform:translateY(-1px);
+      border-color:rgba(34,197,94,0.35);
+      background:linear-gradient(180deg, rgba(11,16,32,1), rgba(6,10,22,1));
+    }
+    .imp3d-home-icon{
+      width:48px;
+      height:48px;
+      border-radius:16px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex:none;
+      font-size:1.35rem;
+      background:rgba(34,197,94,0.14);
+      border:1px solid rgba(34,197,94,0.16);
+    }
+    .imp3d-home-copy{
+      min-width:0;
+      flex:1;
+    }
+    .imp3d-home-title{
+      font-size:0.96rem;
+      font-weight:800;
+      margin-bottom:4px;
+      line-height:1.2;
+    }
+    .imp3d-home-text{
+      font-size:0.82rem;
+      line-height:1.35;
+      color:var(--muted);
+    }
+    .imp3d-home-full{
+      grid-column:1/-1;
+    }
+    .imp3d-home-cta{
+      margin-top:10px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .imp3d-home-cta .btn{
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    @media (max-width:700px){
+      .imp3d-home-grid{
+        grid-template-columns:1fr;
+      }
+      .imp3d-home-card{
+        min-height:88px;
+      }
+      .imp3d-home-full{
+        grid-column:auto;
+      }
+    }
+  </style>
 </head>
 <body class="app-shell">
   <header class="title app-header">
@@ -321,170 +404,17 @@
               Visual pensado para celular, com blocos organizados, estoque por lote e fluxo separado para produção, vendas e perdas.
             </p>
           </div>
-
-          <div class="imp3d-hero-actions">
-            <a class="imp3d-chip" href="#imp3d-filamentos">🧵 Filamentos</a>
-            <a class="imp3d-chip" href="#imp3d-produtos">📦 Produtos</a>
-            <a class="imp3d-chip" href="#imp3d-producao">🏭 Produção</a>
-            <a class="imp3d-chip" href="#imp3d-vendas">🧾 Vendas</a>
-            <a class="imp3d-chip" href="#imp3d-estoque">🗂️ Estoque</a>
-            <a class="imp3d-chip" href="#imp3d-perdas">⚠️ Perdas</a>
-          </div>
         </div>
 
         <div class="imp3d-grid">
           <div class="imp3d-col">
-            <section class="imp3d-folder" id="imp3d-filamentos">
+            <section class="imp3d-folder">
               <div class="imp3d-folder-head">
                 <div>
-                  <span class="imp3d-folder-kicker">Arquivo 01</span>
-                  <h3 class="card-title">🧵 Estoque de filamentos</h3>
+                  <span class="imp3d-folder-kicker">Resumo</span>
+                  <h3 class="card-title">Visão geral</h3>
                 </div>
-                <span class="imp3d-folder-badge">Base de custo</span>
-              </div>
-              <p class="panel-subtitle">Adicione filamentos (cor, tipo, peso em gramas e preço em R$). Estes são usados ao vender produtos.</p>
-
-              <div class="form-grid imp3d-form-grid">
-                <div class="form-field">
-                  <label>Cor</label>
-                  <input id="fil-color" type="text" placeholder="Ex: Preto, Branco, Azul..."/>
-                </div>
-                <div class="form-field">
-                  <label>Tipo</label>
-                  <input id="fil-type" type="text" placeholder="Ex: PLA, PETG, ABS..."/>
-                </div>
-                <div class="form-field">
-                  <label>Peso (g)</label>
-                  <input id="fil-weight" type="number" step="0.01" placeholder="Quantidade em gramas"/>
-                </div>
-                <div class="form-field">
-                  <label>Preço (R$) — preço total do rolo</label>
-                  <input id="fil-price" type="number" step="0.01" placeholder="Preço do filamento (R$)"/>
-                </div>
-                <div class="form-actions">
-                  <button id="fil-add" class="btn-primary" type="button">Adicionar ao estoque</button>
-                </div>
-              </div>
-
-              <div class="imp3d-list-head">
-                <h4>Lista de filamentos</h4>
-                <span class="imp3d-mini-note" id="imp3d-total-fil">0 g</span>
-              </div>
-              <div id="filaments-list" class="imp3d-list"></div>
-            </section>
-
-            <section class="imp3d-folder" id="imp3d-produtos">
-              <div class="imp3d-folder-head">
-                <div>
-                  <span class="imp3d-folder-kicker">Arquivo 02</span>
-                  <h3 class="card-title">📦 Produtos (cadastro)</h3>
-                </div>
-                <span class="imp3d-folder-badge">Tabela base</span>
-              </div>
-              <p class="panel-subtitle">Ao cadastrar o produto, informe horas de impressão, filamento por unidade (g), custo de energia/h e custo de embalagem.</p>
-
-              <div class="form-grid imp3d-form-grid">
-                <div class="form-field">
-                  <label>Nome do produto</label>
-                  <input id="prod-name" type="text" placeholder="Ex: Miniatura A"/>
-                </div>
-                <div class="form-field">
-                  <label>Horas de impressão</label>
-                  <input id="prod-hours" type="number" step="0.1" placeholder="Horas"/>
-                </div>
-                <div class="form-field">
-                  <label>Filamento por unidade (g)</label>
-                  <input id="prod-fil-g" type="number" step="0.01" placeholder="Gramas por peça"/>
-                </div>
-                <div class="form-field">
-                  <label>Custo energia (R$/h)</label>
-                  <input id="prod-energy-h" type="number" step="0.01" placeholder="Custo por hora (R$)"/>
-                </div>
-                <div class="form-field">
-                  <label>Custo embalagem (R$)</label>
-                  <input id="prod-pack" type="number" step="0.01" placeholder="Custo embal. por unidade"/>
-                </div>
-                <div class="form-field">
-                  <label>Preço de venda (R$)</label>
-                  <input id="prod-price" type="number" step="0.01" placeholder="Preço de venda"/>
-                </div>
-                <div class="form-field" style="grid-column:1/-1">
-                  <label>Descrição (opcional)</label>
-                  <input id="prod-desc" type="text" placeholder="Detalhes do produto"/>
-                </div>
-                <div class="form-actions" style="grid-column:1/-1">
-                  <button id="prod-add" class="btn-primary" type="button">Cadastrar produto</button>
-                </div>
-              </div>
-
-              <div class="imp3d-list-head">
-                <h4>Produtos cadastrados</h4>
-                <span class="imp3d-mini-note" id="imp3d-count-prod">0</span>
-              </div>
-              <div id="prod-list" class="imp3d-list"></div>
-            </section>
-
-            <section class="imp3d-folder" id="imp3d-producao">
-              <div class="imp3d-folder-head">
-                <div>
-                  <span class="imp3d-folder-kicker">Arquivo 03</span>
-                  <h3 class="card-title">🏭 Estocar produto</h3>
-                </div>
-                <span class="imp3d-folder-badge">Lote congelado</span>
-              </div>
-              <p class="panel-subtitle">Produza itens sem contabilizar venda ainda.</p>
-
-              <div class="form-grid imp3d-form-grid">
-                <div class="form-field">
-                  <label>Produto</label>
-                  <select id="stock-prod"></select>
-                </div>
-                <div class="form-field">
-                  <label>Filamento</label>
-                  <select id="stock-fil"></select>
-                </div>
-                <div class="form-field">
-                  <label>Quantidade</label>
-                  <input id="stock-qty" type="number" step="1" placeholder="Qtd"/>
-                </div>
-                <div class="form-field">
-                  <label>Observação</label>
-                  <input id="stock-note" type="text" placeholder="Opcional"/>
-                </div>
-                <div class="form-actions">
-                  <button id="stock-add" class="btn-primary" type="button">Estocar produto</button>
-                </div>
-              </div>
-
-              <div class="imp3d-list-head">
-                <h4>Estoque de produtos</h4>
-                <span class="imp3d-mini-note">por lote</span>
-              </div>
-              <div class="table-wrapper imp3d-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Produto</th>
-                      <th>Qtd</th>
-                      <th>Custo médio/un</th>
-                      <th>Custo total</th>
-                      <th>Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody id="imp3d-stock-body"></tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-
-          <div class="imp3d-col">
-            <section class="imp3d-folder imp3d-summary-folder" id="imp3d-resumo">
-              <div class="imp3d-folder-head">
-                <div>
-                  <span class="imp3d-folder-kicker">Painel rápido</span>
-                  <h3 class="card-title">Resumo Impressora3D</h3>
-                </div>
-                <span class="imp3d-folder-badge">Dashboard</span>
+                <span class="imp3d-folder-badge">Atualizado automaticamente</span>
               </div>
 
               <div class="yellow-grid imp3d-summary-grid" style="margin-top:8px">
@@ -500,112 +430,70 @@
                 <div class="y-row"><span>Lucro real</span><strong id="imp3d-total-profit">R$ 0,00</strong></div>
               </div>
             </section>
+          </div>
 
-            <section class="imp3d-folder" id="imp3d-vendas">
+          <div class="imp3d-col">
+            <section class="imp3d-folder">
               <div class="imp3d-folder-head">
                 <div>
-                  <span class="imp3d-folder-kicker">Arquivo 04</span>
-                  <h3 class="card-title">🧾 Log de vendas (Impressora3D)</h3>
+                  <span class="imp3d-folder-kicker">Arquivos</span>
+                  <h3 class="card-title">Abrir área</h3>
                 </div>
-                <span class="imp3d-folder-badge">Histórico</span>
+                <span class="imp3d-folder-badge">Navegação</span>
               </div>
 
-              <div class="table-wrapper imp3d-table-wrap">
-                <table class="imp3d-wide-table">
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Produto</th>
-                      <th>Filamento</th>
-                      <th>Qtd</th>
-                      <th>Bruto</th>
-                      <th>Taxa</th>
-                      <th>Líquido</th>
-                      <th>Filamento</th>
-                      <th>Custo/hora</th>
-                      <th>Embalagem</th>
-                      <th>Reinvest.</th>
-                      <th>Lucro</th>
-                    </tr>
-                  </thead>
-                  <tbody id="imp3d-sales-body"></tbody>
-                </table>
-              </div>
-            </section>
+              <div class="imp3d-home-grid">
+                <a class="imp3d-home-card imp3d-home-full" href="impressora3d/index.html">
+                  <div class="imp3d-home-icon">⌂</div>
+                  <div class="imp3d-home-copy">
+                    <div class="imp3d-home-title">Painel principal</div>
+                    <div class="imp3d-home-text">Resumo rápido e atalhos da pasta Impressora3D.</div>
+                  </div>
+                </a>
 
-            <section class="imp3d-folder" id="imp3d-estoque">
-              <div class="imp3d-folder-head">
-                <div>
-                  <span class="imp3d-folder-kicker">Arquivo 05</span>
-                  <h3 class="card-title">🗂️ Vender do estoque</h3>
-                </div>
-                <span class="imp3d-folder-badge">Sem recalcular lote</span>
-              </div>
+                <a class="imp3d-home-card" href="impressora3d/filamentos.html">
+                  <div class="imp3d-home-icon">🧵</div>
+                  <div class="imp3d-home-copy">
+                    <div class="imp3d-home-title">Filamentos</div>
+                    <div class="imp3d-home-text">Estoque base e custo por rolo.</div>
+                  </div>
+                </a>
 
-              <div class="form-grid imp3d-form-grid">
-                <div class="form-field">
-                  <label>Item em estoque</label>
-                  <select id="sell-stock-item"></select>
-                </div>
+                <a class="imp3d-home-card" href="impressora3d/produtos.html">
+                  <div class="imp3d-home-icon">📦</div>
+                  <div class="imp3d-home-copy">
+                    <div class="imp3d-home-title">Produtos</div>
+                    <div class="imp3d-home-text">Cadastro de itens, custos e preço.</div>
+                  </div>
+                </a>
 
-                <div class="form-field">
-                  <label>Quantidade</label>
-                  <input id="sell-stock-qty" type="number" step="1"/>
-                </div>
+                <a class="imp3d-home-card" href="impressora3d/estoque.html">
+                  <div class="imp3d-home-icon">🗂️</div>
+                  <div class="imp3d-home-copy">
+                    <div class="imp3d-home-title">Estoque</div>
+                    <div class="imp3d-home-text">Produção em lotes e venda posterior.</div>
+                  </div>
+                </a>
 
-                <div class="form-actions">
-                  <button id="sell-stock-btn" class="btn-primary" type="button">Vender do estoque</button>
-                </div>
-              </div>
-            </section>
+                <a class="imp3d-home-card" href="impressora3d/vendas.html">
+                  <div class="imp3d-home-icon">🧾</div>
+                  <div class="imp3d-home-copy">
+                    <div class="imp3d-home-title">Vendas</div>
+                    <div class="imp3d-home-text">Histórico de vendas e lucro real.</div>
+                  </div>
+                </a>
 
-            <section class="imp3d-folder" id="imp3d-perdas">
-              <div class="imp3d-folder-head">
-                <div>
-                  <span class="imp3d-folder-kicker">Arquivo 06</span>
-                  <h3 class="card-title">⚠️ Perdas / retiradas de filamento</h3>
-                </div>
-                <span class="imp3d-folder-badge">Controle de prejuízo</span>
+                <a class="imp3d-home-card" href="impressora3d/perdas.html">
+                  <div class="imp3d-home-icon">⚠️</div>
+                  <div class="imp3d-home-copy">
+                    <div class="imp3d-home-title">Perdas</div>
+                    <div class="imp3d-home-text">Prejuízo, retiradas e material perdido.</div>
+                  </div>
+                </a>
               </div>
 
-              <div class="table-wrapper imp3d-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Filamento</th>
-                      <th>g</th>
-                      <th>Custo (R$)</th>
-                      <th>Motivo</th>
-                    </tr>
-                  </thead>
-                  <tbody id="imp3d-losses-body"></tbody>
-                </table>
-              </div>
-            </section>
-
-            <section class="imp3d-folder" id="imp3d-acoes">
-              <div class="imp3d-folder-head">
-                <div>
-                  <span class="imp3d-folder-kicker">Arquivo 07</span>
-                  <h3 class="card-title">⚡ Ações rápidas</h3>
-                </div>
-                <span class="imp3d-folder-badge">Utilidades</span>
-              </div>
-
-              <div class="imp3d-action-grid">
-                <div class="action-tile">
-                  <button id="imp3d-export" class="btn action-btn" type="button">Exportar backup Impressora3D</button>
-                  <span class="action-tile-sub">Salvar dados específicos da aba</span>
-                </div>
-                <div class="action-tile">
-                  <button id="imp3d-clear" class="btn ghost action-btn" type="button">Limpar tudo Impressora3D</button>
-                  <span class="action-tile-sub">Apagar estoque, vendas e perdas</span>
-                </div>
-                <div class="action-tile">
-                  <button id="sh-to-nb" class="btn action-btn" type="button">Transferir Shopee → Nubank</button>
-                  <span class="action-tile-sub">Mover saldo entre contas</span>
-                </div>
+              <div class="imp3d-home-cta">
+                <a class="btn action-btn" href="impressora3d/index.html">Abrir hub completo</a>
               </div>
             </section>
           </div>
@@ -625,93 +513,24 @@
 
   <script>
     (function(){
-      const container = document.getElementById('tab-imp3d');
-      if(!container) return;
-
-      const mo = new MutationObserver(mutations=>{
-        for(const m of mutations){
-          for(const n of m.addedNodes){
-            if(n.nodeType !== 1) continue;
-            if(n.id && n.id.startsWith('imp3d-sell-form-')){
-              enhanceSellForm(n);
-            }
-          }
-        }
-      });
-
-      mo.observe(container, { childList: true, subtree: true });
-
-      function enhanceSellForm(formEl){
-        if(formEl._enhanced) return;
-        formEl._enhanced = true;
-
-        const preview = document.createElement('div');
-        preview.className = 'imp3d-sell-preview';
-        preview.innerHTML = `
-          <div><span class="label">Custo material (total)</span><span class="value" id="${formEl.id}-mat">R$ 0,00</span></div>
-          <div><span class="label">Taxa plataforma (total)</span><span class="value" id="${formEl.id}-fee">R$ 0,00</span></div>
-          <div><span class="label">Recebido líquido</span><span class="value" id="${formEl.id}-net">R$ 0,00</span></div>
-          <div><span class="label">Lucro estimado</span><span class="value" id="${formEl.id}-profit">R$ 0,00</span></div>
-        `;
-        formEl.appendChild(preview);
-
-        function ids(){
-          const pid = formEl.id.replace('imp3d-sell-form-','');
-          const filSel = formEl.querySelector(`#sell-fil-${pid}`);
-          const qtyInput = formEl.querySelector(`#sell-qty-${pid}`);
-          const priceInput = formEl.querySelector(`#sell-price-${pid}`);
-          return { pid, filSel, qtyInput, priceInput };
-        }
-
-        function fmt(v){ return (typeof money === 'function') ? money(v) : ('R$ ' + Number(v||0).toFixed(2)); }
-
-        function recompute(){
-          const { pid, filSel, qtyInput, priceInput } = ids();
-          const prod = window.state && window.state.products && window.state.products.find(p=>p.id===pid);
-          const fil = window.state && window.state.filaments && window.state.filaments.find(f=>f.id === (filSel ? filSel.value : null));
-          const qty = Number(qtyInput ? qtyInput.value || 0 : 0);
-          const price = Number(priceInput ? priceInput.value || 0 : (prod ? prod.price : 0));
-          if(!prod || !fil || qty <= 0 || price <= 0){
-            preview.querySelector(`#${formEl.id}-mat`).textContent = fmt(0);
-            preview.querySelector(`#${formEl.id}-fee`).textContent = fmt(0);
-            preview.querySelector(`#${formEl.id}-net`).textContent = fmt(0);
-            preview.querySelector(`#${formEl.id}-profit`).textContent = fmt(0);
-            return;
-          }
-
-          const initial = Number(fil.initialWeight || fil.weight || 0);
-          const priceRolo = Number(fil.price || 0);
-          const pricePerGram = (initial > 0) ? (priceRolo / initial) : 0;
-          const matPerUnit = Number(prod.fil_g || 0);
-          const materialCostTotal = pricePerGram * matPerUnit * qty;
-
-          const FEE_FIXED = (typeof SHOPEE_FEE_FIXED !== 'undefined') ? SHOPEE_FEE_FIXED : 4.00;
-          const FEE_PCT = (typeof SHOPEE_FEE_PCT !== 'undefined') ? SHOPEE_FEE_PCT : 0.20;
-          const feePerUnit = Number(FEE_FIXED) + Number(FEE_PCT) * Number(price || 0);
-          const feeTotal = feePerUnit * qty;
-
-          const gross = Number(price) * qty;
-          const net = gross - feeTotal;
-          let energyCost = 0, packCost = 0;
-          if(prod){
-            const energyPerUnit = Number(prod.hours || 0) * (Number(prod.energy_h || prod.energy || 0) || 0);
-            energyCost = energyPerUnit * 1;
-            packCost = Number(prod.pack || prod.pack_cost || 0);
-          }
-          const profit = net - materialCostTotal - (energyCost + packCost) * qty;
-
-          preview.querySelector(`#${formEl.id}-mat`).textContent = fmt(materialCostTotal);
-          preview.querySelector(`#${formEl.id}-fee`).textContent = fmt(feeTotal);
-          preview.querySelector(`#${formEl.id}-net`).textContent = fmt(net);
-          preview.querySelector(`#${formEl.id}-profit`).textContent = fmt(profit);
-        }
-
-        formEl.addEventListener('change', recompute);
-        formEl.addEventListener('input', recompute);
-        setTimeout(recompute, 120);
+      function activateTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(btn=>{
+          btn.classList.toggle('active', btn.dataset.tab === tabName);
+        });
+        document.querySelectorAll('.tab-panel').forEach(panel=>{
+          panel.classList.toggle('active', panel.id === 'tab-' + tabName);
+        });
       }
 
-      document.querySelectorAll('[id^="imp3d-sell-form-"]').forEach(n=> enhanceSellForm(n));
+      if (location.hash && location.hash.startsWith('#tab-')) {
+        activateTab(location.hash.replace('#tab-', ''));
+      }
+
+      window.addEventListener('hashchange', ()=>{
+        if (location.hash && location.hash.startsWith('#tab-')) {
+          activateTab(location.hash.replace('#tab-', ''));
+        }
+      });
     })();
   </script>
 </body>
