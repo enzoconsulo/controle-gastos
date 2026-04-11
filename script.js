@@ -976,6 +976,71 @@ function getFilamentPricePerGram(f){
   return initial > 0 ? (price / initial) : 0;
 }
 
+function populateImp3dStockSelects(){
+  const stockProd = document.getElementById('stock-prod');
+  if(stockProd){
+    const current = stockProd.value;
+    stockProd.innerHTML = '';
+    if(!state.products.length){
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'Nenhum produto';
+      stockProd.appendChild(o);
+    } else {
+      state.products.forEach(prod=>{
+        const o = document.createElement('option');
+        o.value = prod.id;
+        o.textContent = `${prod.name} — ${money(prod.price)}`;
+        stockProd.appendChild(o);
+      });
+      if(current) stockProd.value = current;
+    }
+  }
+
+  const stockFil = document.getElementById('stock-fil');
+  if(stockFil){
+    const current = stockFil.value;
+    stockFil.innerHTML = '';
+    if(!state.filaments.length){
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'Nenhum filamento';
+      stockFil.appendChild(o);
+    } else {
+      state.filaments.forEach(f=>{
+        const o = document.createElement('option');
+        o.value = f.id;
+        o.textContent = `${f.color} — ${f.type} (${Number(f.weight || 0).toFixed(2)} g)`;
+        stockFil.appendChild(o);
+      });
+      if(current) stockFil.value = current;
+    }
+  }
+
+  const sellStockItem = document.getElementById('sell-stock-item');
+  if(sellStockItem){
+    const current = sellStockItem.value;
+    sellStockItem.innerHTML = '';
+    const grouped = getGroupedStock();
+
+    if(!grouped.length){
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'Nenhum item em estoque';
+      sellStockItem.appendChild(o);
+    } else {
+      grouped.forEach(g=>{
+        const prod = state.products.find(p=>p.id===g.productId) || { name: g.productId };
+        const o = document.createElement('option');
+        o.value = g.productId;
+        o.textContent = `${prod.name} — ${g.qty} un`;
+        sellStockItem.appendChild(o);
+      });
+      if(current) sellStockItem.value = current;
+    }
+  }
+}
+
 /* Render lista de filamentos */
 function renderFilaments(){
   const container = document.getElementById('filaments-list');
@@ -1275,13 +1340,13 @@ function renderProducts(){
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
   
-      const filId = prompt('ID do filamento:');
-      if(!filId) return;
+      const prodSel = document.getElementById('stock-prod');
+      if(prodSel) prodSel.value = id;
   
-      const qty = Number(prompt('Quantidade:','1') || 0);
-      if(qty <= 0) return;
+      const qtyInput = document.getElementById('stock-qty');
+      if(qtyInput) qtyInput.focus();
   
-      stockProduct(id, filId, qty);
+      document.getElementById('tab-imp3d')?.scrollIntoView({ behavior:'smooth', block:'start' });
     });
   });
 
@@ -1752,7 +1817,7 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
 }
 
 function renderImpStock(){
-  const el = document.getElementById('imp3d-stock-body');
+  const el = document.getElementById('stock-list');
   if(!el) return;
 
   el.innerHTML = '';
@@ -1760,7 +1825,10 @@ function renderImpStock(){
   const grouped = getGroupedStock();
 
   if(!grouped.length){
-    el.innerHTML = `<tr><td colspan="5">Nenhum item em estoque</td></tr>`;
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'Nenhum item em estoque.';
+    el.appendChild(empty);
     return;
   }
 
@@ -1769,39 +1837,37 @@ function renderImpStock(){
     const totalCost = g.materialCost + g.hourlyCost + g.packagingCost;
     const costPerUnit = g.qty > 0 ? totalCost / g.qty : 0;
 
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${prod.name}</td>
-      <td>${g.qty}</td>
-      <td>${money(costPerUnit)}</td>
-      <td>${money(totalCost)}</td>
-      <td>
+    const card = document.createElement('div');
+    card.className = 'box-card';
+    card.style.display = 'flex';
+    card.style.justifyContent = 'space-between';
+    card.style.alignItems = 'center';
+
+    card.innerHTML = `
+      <div>
+        <div style="font-weight:700">${prod.name}</div>
+        <div style="font-size:0.85rem;color:var(--muted);">
+          Qtd: ${g.qty} — Custo médio/un: ${money(costPerUnit)} — Custo total: ${money(totalCost)}
+        </div>
+      </div>
+      <div style="text-align:right">
         <button class="btn small sell-stock" data-id="${g.productId}">Vender</button>
-      </td>
+      </div>
     `;
-    el.appendChild(tr);
+    el.appendChild(card);
   });
 
   el.querySelectorAll('.sell-stock').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const productId = e.target.dataset.id;
-      const group = grouped.find(g=>g.productId === productId);
-      if(!group) return;
 
-      const qty = Number(prompt(`Quantidade para vender (máx ${group.qty}):`, '1') || 0);
-      if(!qty || qty <= 0 || qty > group.qty){
-        alert('Quantidade inválida');
-        return;
-      }
+      const sellSel = document.getElementById('sell-stock-item');
+      if(sellSel) sellSel.value = productId;
 
-      const price = Number(prompt('Preço por unidade:', '0') || 0);
-      if(!price || price <= 0){
-        alert('Preço inválido');
-        return;
-      }
+      const qtyInput = document.getElementById('sell-stock-qty');
+      if(qtyInput) qtyInput.focus();
 
-      const accId = prompt('Conta (id):', 'nubank') || 'nubank';
-      sellGroupedStock(productId, qty, price, accId);
+      document.getElementById('tab-imp3d')?.scrollIntoView({ behavior:'smooth', block:'start' });
     });
   });
 }
@@ -2086,6 +2152,44 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const impClearBtn = document.getElementById('imp3d-clear');
   if(impClearBtn) impClearBtn.addEventListener('click', imp3dClearAll);
 
+    const stockAddBtn = document.getElementById('stock-add');
+  if(stockAddBtn) stockAddBtn.addEventListener('click', ()=>{
+    const productId = document.getElementById('stock-prod')?.value || '';
+    const filamentId = document.getElementById('stock-fil')?.value || '';
+    const qty = Number(document.getElementById('stock-qty')?.value || 0);
+
+    if(!productId || !filamentId || qty <= 0){
+      alert('Selecione produto, filamento e quantidade válidos.');
+      return;
+    }
+
+    stockProduct(productId, filamentId, qty);
+    const qtyInput = document.getElementById('stock-qty');
+    if(qtyInput) qtyInput.value = '';
+  });
+
+  const sellStockBtn = document.getElementById('sell-stock-btn');
+  if(sellStockBtn) sellStockBtn.addEventListener('click', ()=>{
+    const productId = document.getElementById('sell-stock-item')?.value || '';
+    const qty = Number(document.getElementById('sell-stock-qty')?.value || 0);
+
+    if(!productId || qty <= 0){
+      alert('Selecione um item em estoque e uma quantidade válida.');
+      return;
+    }
+
+    const prod = state.products.find(p=>p.id===productId);
+    if(!prod){
+      alert('Produto inválido.');
+      return;
+    }
+
+    // venda do estoque usando o preço cadastrado do produto
+    sellGroupedStock(productId, qty, Number(prod.price || 0), 'nubank');
+    const qtyInput = document.getElementById('sell-stock-qty');
+    if(qtyInput) qtyInput.value = '';
+  });
+
   // botão de transferência Shopee -> Nubank
   const shToNbBtn = document.getElementById('sh-to-nb');
   if(shToNbBtn) shToNbBtn.addEventListener('click', ()=>{
@@ -2114,6 +2218,7 @@ function updateAll(){
   renderImpSales();
   renderImpLosses();
   renderImpStock();
+  populateImp3dStockSelects();
 }
 
 /* ---------- FIM DO ARQUIVO ---------- */
