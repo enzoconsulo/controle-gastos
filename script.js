@@ -1443,11 +1443,18 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
   const acc = state.accounts.find(a=>a.id===accountId);
   if(!acc) return alert('Conta inválida');
 
-  let remaining = qtyToSell;
-
   const items = state.impStock
     .filter(s => s.productId === productId)
     .sort((a,b)=> a.date > b.date ? 1 : -1);
+
+  const totalAvailable = items.reduce((s, item) => s + Number(item.qty || 0), 0);
+  if(totalAvailable < qtyToSell){
+    alert('Estoque insuficiente.');
+    return;
+  }
+
+  let remaining = qtyToSell;
+  const changes = [];
 
   let materialCost = 0;
   let hourlyCost = 0;
@@ -1456,21 +1463,22 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
   for(const item of items){
     if(remaining <= 0) break;
 
-    const takeQty = Math.min(Number(item.qty || 0), remaining);
-    const ratio = takeQty / Number(item.qty || 1);
+    const currentQty = Number(item.qty || 0);
+    const takeQty = Math.min(currentQty, remaining);
+    const ratio = takeQty / currentQty;
+
+    changes.push({ item, takeQty });
 
     materialCost += Number(item.materialCost || 0) * ratio;
     hourlyCost += Number(item.hourlyCost || 0) * ratio;
     packagingCost += Number(item.packagingCost || 0) * ratio;
 
-    item.qty = Number(item.qty || 0) - takeQty;
     remaining -= takeQty;
   }
 
-  if(remaining > 0){
-    alert('Estoque insuficiente.');
-    return;
-  }
+  changes.forEach(({ item, takeQty }) => {
+    item.qty = Number(item.qty || 0) - takeQty;
+  });
 
   state.impStock = state.impStock.filter(s => Number(s.qty || 0) > 0);
 
