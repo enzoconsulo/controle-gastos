@@ -2225,6 +2225,7 @@ function updateImp3dAccountBalances(){
   if(shopeeEl){
     shopeeEl.textContent = shopeeAcc ? money(shopeeAcc.balance || 0) : '—';
   }
+  console.log(state.accounts);
 }
 
 function updateAll(){
