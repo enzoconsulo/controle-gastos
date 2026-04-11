@@ -1076,6 +1076,9 @@ function populateImp3dStockSelects(){
 /* Render lista de filamentos */
 function renderFilaments(){
   const container = document.getElementById('filaments-list');
+  const total = sum(state.filaments, x=>x.weight||0);
+  const totalEl = document.getElementById('imp3d-total-fil');
+  if(totalEl) totalEl.textContent = `${total.toFixed(2)} g`;
   if(!container) return;
   container.innerHTML = '';
   if(!state.filaments.length){
@@ -1314,6 +1317,8 @@ function handleAddFilament(){
 /* Render produtos list (mantido) */
 function renderProducts(){
   const container = document.getElementById('prod-list');
+  const countEl = document.getElementById('imp3d-count-prod');
+  if(countEl) countEl.textContent = String(state.products.length);
   if(!container) return;
   container.innerHTML='';
   if(!state.products.length){
@@ -1375,7 +1380,6 @@ function renderProducts(){
     });
   });
 
-  if(document.getElementById('imp3d-count-prod')) document.getElementById('imp3d-count-prod').textContent = String(state.products.length);
 }
 
 /* abre formulário de venda inline (mantido) */
