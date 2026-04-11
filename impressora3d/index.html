@@ -3,98 +3,215 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
-  <meta name="theme-color" content="#0b1020"/>
-  <title>Impressora3D — Painel</title>
+  <title>Impressora 3D — Hub</title>
   <link rel="stylesheet" href="../style.css"/>
-  <link rel="stylesheet" href="imp3d-pages.css"/>
+
+  <style>
+    body{
+      background:var(--bg);
+    }
+
+    .app-header{
+      padding:14px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+
+    .back-btn{
+      width:38px;
+      height:38px;
+      border-radius:12px;
+      border:1px solid rgba(148,163,184,0.2);
+      background:rgba(11,16,32,0.9);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      font-size:1.1rem;
+    }
+
+    .app-title{
+      font-weight:800;
+      font-size:1rem;
+    }
+
+    .imp3d-container{
+      padding:12px;
+      max-width:900px;
+      margin:auto;
+    }
+
+    .summary-card{
+      padding:14px;
+      border-radius:20px;
+      background:linear-gradient(180deg, rgba(11,16,32,0.98), rgba(6,10,22,0.98));
+      border:1px solid rgba(148,163,184,0.14);
+      margin-bottom:12px;
+    }
+
+    .summary-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      margin-top:8px;
+    }
+
+    .summary-item{
+      background:rgba(255,255,255,0.03);
+      border-radius:12px;
+      padding:10px;
+      font-size:0.85rem;
+    }
+
+    .summary-item strong{
+      display:block;
+      margin-top:4px;
+      font-size:0.95rem;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(2,1fr);
+      gap:10px;
+    }
+
+    .card{
+      display:flex;
+      gap:10px;
+      padding:14px;
+      border-radius:20px;
+      text-decoration:none;
+      color:var(--text);
+      background:linear-gradient(180deg, rgba(11,16,32,0.98), rgba(6,10,22,0.98));
+      border:1px solid rgba(148,163,184,0.14);
+      min-height:90px;
+    }
+
+    .icon{
+      width:42px;
+      height:42px;
+      border-radius:14px;
+      background:rgba(34,197,94,0.15);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:1.2rem;
+    }
+
+    .card-title{
+      font-weight:700;
+      font-size:0.9rem;
+    }
+
+    .card-text{
+      font-size:0.78rem;
+      color:var(--muted);
+    }
+
+    .full{
+      grid-column:1/-1;
+    }
+
+    @media(max-width:600px){
+      .grid{
+        grid-template-columns:1fr;
+      }
+    }
+  </style>
 </head>
-<body class="app-shell">
-  <header class="imp3d-topbar">
-    <a class="imp3d-back" href="../index.html#tab-imp3d">← Voltar</a>
-    <div class="imp3d-page-title">
-      <h2>Impressora 3D</h2>
-      <p>Resumo rápido e navegação entre arquivos</p>
-    </div>
-  </header>
 
-  <main class="wrap app-main imp3d-page">
-    <div class="imp3d-shell">
-      <section class="imp3d-hero">
-        <div class="imp3d-hero-copy">
-          <span class="imp3d-eyebrow">Painel principal</span>
-          <h1 class="panel-title" style="margin:0;">Resumo rápido</h1>
-          <p class="imp3d-hero-text">
-            Use esta página como início da área de Impressora3D. Os arquivos abaixo levam para cada função separada.
-          </p>
-        </div>
-      </section>
+<body>
 
-      <div class="imp3d-grid">
-        <div class="imp3d-col">
-          <section class="imp3d-folder">
-            <div class="imp3d-folder-head">
-              <div>
-                <span class="imp3d-folder-kicker">Resumo</span>
-                <h3 class="card-title">Visão geral</h3>
-              </div>
-              <span class="imp3d-folder-badge">Atualizado automaticamente</span>
-            </div>
+  <div class="app-header">
+    <button class="back-btn" onclick="history.back()">←</button>
+    <div class="app-title">Impressora 3D</div>
+  </div>
 
-            <div class="yellow-grid imp3d-summary-grid" style="margin-top:8px">
-              <div class="y-row"><span>Total filamentos (g)</span><strong id="imp3d-total-fil">0 g</strong></div>
-              <div class="y-row"><span>Produtos cadastrados</span><strong id="imp3d-count-prod">0</strong></div>
-              <div class="y-row"><span>Conta imp3d</span><strong id="imp3d-acc-balance">—</strong></div>
-              <div class="y-row"><span>Conta Shopee</span><strong id="shopee-acc-balance">—</strong></div>
-            </div>
+  <div class="imp3d-container">
 
-            <div class="yellow-grid imp3d-summary-grid" style="margin-top:12px">
-              <div class="y-row"><span>Recebido líquido</span><strong id="imp3d-total-received">R$ 0,00</strong></div>
-              <div class="y-row"><span>Reinvestimento obrigatório</span><strong id="imp3d-total-reinvest">R$ 0,00</strong></div>
-              <div class="y-row"><span>Lucro real</span><strong id="imp3d-total-profit">R$ 0,00</strong></div>
-            </div>
-          </section>
+    <!-- RESUMO -->
+    <div class="summary-card">
+      <div style="font-weight:700;">Resumo rápido</div>
+
+      <div class="summary-grid">
+        <div class="summary-item">
+          Filamentos
+          <strong id="imp3d-total-fil">0 g</strong>
         </div>
 
-        <div class="imp3d-col">
-          <section class="imp3d-folder">
-            <div class="imp3d-folder-head">
-              <div>
-                <span class="imp3d-folder-kicker">Arquivos</span>
-                <h3 class="card-title">Abrir área</h3>
-              </div>
-              <span class="imp3d-folder-badge">Navegação</span>
-            </div>
+        <div class="summary-item">
+          Produtos
+          <strong id="imp3d-count-prod">0</strong>
+        </div>
 
-            <div class="imp3d-action-grid">
-              <div class="action-tile">
-                <a class="btn action-btn" href="filamentos.html">🧵 Filamentos</a>
-                <span class="action-tile-sub">Cadastrar e acompanhar o estoque de rolos.</span>
-              </div>
-              <div class="action-tile">
-                <a class="btn action-btn" href="produtos.html">📦 Produtos</a>
-                <span class="action-tile-sub">Cadastro de itens, custos e preço de venda.</span>
-              </div>
-              <div class="action-tile">
-                <a class="btn action-btn" href="estoque.html">🗂️ Estoque</a>
-                <span class="action-tile-sub">Produzir itens e vender depois.</span>
-              </div>
-              <div class="action-tile">
-                <a class="btn action-btn" href="vendas.html">🧾 Vendas</a>
-                <span class="action-tile-sub">Ver o histórico e os números de vendas.</span>
-              </div>
-              <div class="action-tile">
-                <a class="btn action-btn" href="perdas.html">⚠️ Perdas</a>
-                <span class="action-tile-sub">Retiradas, prejuízos e material perdido.</span>
-              </div>
-            </div>
-          </section>
+        <div class="summary-item">
+          Recebido
+          <strong id="imp3d-total-received">R$ 0,00</strong>
+        </div>
+
+        <div class="summary-item">
+          Lucro
+          <strong id="imp3d-total-profit">R$ 0,00</strong>
         </div>
       </div>
     </div>
-  </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="../script.js?v=8"></script>
-  <script src="../sync-pluggy-ui.js?v=8"></script>
+    <!-- GRID -->
+    <div class="grid">
+
+      <a class="card full" href="../index.html#tab-imp3d">
+        <div class="icon">⌂</div>
+        <div>
+          <div class="card-title">Voltar ao painel</div>
+          <div class="card-text">Retornar para o app principal</div>
+        </div>
+      </a>
+
+      <a class="card" href="filamentos.html">
+        <div class="icon">🧵</div>
+        <div>
+          <div class="card-title">Filamentos</div>
+          <div class="card-text">Controle de material</div>
+        </div>
+      </a>
+
+      <a class="card" href="produtos.html">
+        <div class="icon">📦</div>
+        <div>
+          <div class="card-title">Produtos</div>
+          <div class="card-text">Cadastro e custos</div>
+        </div>
+      </a>
+
+      <a class="card" href="estoque.html">
+        <div class="icon">🗂️</div>
+        <div>
+          <div class="card-title">Estoque</div>
+          <div class="card-text">Produção por lote</div>
+        </div>
+      </a>
+
+      <a class="card" href="vendas.html">
+        <div class="icon">🧾</div>
+        <div>
+          <div class="card-title">Vendas</div>
+          <div class="card-text">Histórico e lucro</div>
+        </div>
+      </a>
+
+      <a class="card" href="perdas.html">
+        <div class="icon">⚠️</div>
+        <div>
+          <div class="card-title">Perdas</div>
+          <div class="card-text">Controle de prejuízo</div>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <script src="../script.js"></script>
+
 </body>
 </html>
