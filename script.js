@@ -1508,6 +1508,9 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
   const acc = state.accounts.find(a=>a.id===accountId);
   if(!acc) return alert('Conta inválida');
 
+  const prod = state.products.find(p=>p.id===productId);
+  if(!prod) return alert('Produto inválido');
+
   const items = state.impStock
     .filter(s => s.productId === productId)
     .sort((a,b)=> a.date > b.date ? 1 : -1);
@@ -1521,9 +1524,10 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
   let remaining = qtyToSell;
   const changes = [];
 
-  let materialCost = 0;
-  let hourlyCost = 0;
-  let packagingCost = 0;
+  let materialCostTotal = 0;
+  let hourlyCostTotal = 0;
+  let packagingCostTotal = 0;
+  let firstFilamentId = items[0]?.filamentId || 'estoque';
 
   for(const item of items){
     if(remaining <= 0) break;
@@ -1534,9 +1538,9 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
 
     changes.push({ item, takeQty });
 
-    materialCost += Number(item.materialCost || 0) * ratio;
-    hourlyCost += Number(item.hourlyCost || 0) * ratio;
-    packagingCost += Number(item.packagingCost || 0) * ratio;
+    materialCostTotal += Number(item.materialCost || 0) * ratio;
+    hourlyCostTotal += Number(item.hourlyCost || 0) * ratio;
+    packagingCostTotal += Number(item.packagingCost || 0) * ratio;
 
     remaining -= takeQty;
   }
@@ -1547,14 +1551,17 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
 
   state.impStock = state.impStock.filter(s => Number(s.qty || 0) > 0);
 
-  const totalCost = materialCost + hourlyCost + packagingCost;
-  const amountGross = pricePerUnit * qtyToSell;
-  const profit = amountGross - totalCost;
+  const amountGross = Number(pricePerUnit || 0) * qtyToSell;
+  const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * Number(pricePerUnit || 0);
+  const feeTotal = feePerUnit * qtyToSell;
+  const netReceived = amountGross - feeTotal;
+  const mandatoryReinvest = materialCostTotal + hourlyCostTotal + packagingCostTotal;
+  const profit = netReceived - mandatoryReinvest;
 
   const entry = {
     id: 'imp3d-stock-sale-' + Date.now().toString(),
     date: todayISO(),
-    desc: `Venda estoque`,
+    desc: `Venda estoque ${prod.name} x${qtyToSell}`,
     amount: amountGross,
     type: 'entrada',
     accountId: acc.id,
@@ -1564,20 +1571,80 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
   applyExpenseEffects(entry);
   state.expenses.push(entry);
 
+  if(feeTotal > 0){
+    const feeExp = {
+      id: 'imp3d-stock-fee-' + Date.now().toString(),
+      date: todayISO(),
+      desc: `Taxa Shopee — venda estoque ${prod.name} x${qtyToSell}`,
+      amount: feeTotal,
+      type: 'saldo',
+      accountId: acc.id,
+      method: 'taxa_shopee',
+      category: 'taxa_plataforma'
+    };
+    applyExpenseEffects(feeExp);
+    state.expenses.push(feeExp);
+  }
+
+  if(materialCostTotal > 0){
+    const matExp = {
+      id: 'imp3d-stock-mat-' + Date.now().toString(),
+      date: todayISO(),
+      desc: `Custo material estoque ${prod.name} x${qtyToSell}`,
+      amount: materialCostTotal,
+      type: 'saldo',
+      accountId: 'imp3d',
+      method: 'custo material',
+      category: 'custo_material'
+    };
+    applyExpenseEffects(matExp);
+    state.expenses.push(matExp);
+  }
+
+  if(hourlyCostTotal > 0){
+    const hourExp = {
+      id: 'imp3d-stock-hour-' + Date.now().toString(),
+      date: todayISO(),
+      desc: `Custo hora estoque ${prod.name} x${qtyToSell}`,
+      amount: hourlyCostTotal,
+      type: 'saldo',
+      accountId: 'imp3d',
+      method: 'custo hora',
+      category: 'custo_hora'
+    };
+    applyExpenseEffects(hourExp);
+    state.expenses.push(hourExp);
+  }
+
+  if(packagingCostTotal > 0){
+    const packExp = {
+      id: 'imp3d-stock-pack-' + Date.now().toString(),
+      date: todayISO(),
+      desc: `Custo embalagem estoque ${prod.name} x${qtyToSell}`,
+      amount: packagingCostTotal,
+      type: 'saldo',
+      accountId: 'imp3d',
+      method: 'custo embalagem',
+      category: 'custo_embalagem'
+    };
+    applyExpenseEffects(packExp);
+    state.expenses.push(packExp);
+  }
+
   state.impSales.push({
     id: Date.now().toString(),
     date: todayISO(),
     productId,
-    filamentId: 'estoque',
+    filamentId: firstFilamentId,
     accountId: acc.id,
     qty: qtyToSell,
     amountGross,
-    feeTotal: 0,
-    netReceived: amountGross,
-    materialCost,
-    hourlyCost,
-    packagingCost,
-    mandatoryReinvest: totalCost,
+    feeTotal,
+    netReceived,
+    materialCost: materialCostTotal,
+    hourlyCost: hourlyCostTotal,
+    packagingCost: packagingCostTotal,
+    mandatoryReinvest,
     profit,
     channel: 'estoque'
   });
@@ -1586,10 +1653,11 @@ function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
   updateAll();
 
   alert(
-    `Venda realizada!\n` +
-    `Qtd: ${qtyToSell}\n` +
-    `Custo: ${money(totalCost)}\n` +
-    `Lucro: ${money(profit)}`
+    `Venda do estoque registrada.\n` +
+    `Bruto: ${money(amountGross)}\n` +
+    `Taxa Shopee: ${money(feeTotal)}\n` +
+    `Líquido recebido: ${money(netReceived)}\n` +
+    `Lucro real: ${money(profit)}`
   );
 }
 
@@ -1654,24 +1722,11 @@ function stockProduct(productId, filamentId, qty){
   alert(`Item estocado com sucesso!\nQuantidade: ${qty}`);
 }
 
-/* vendendo: determinístico, registra entradas/despesas nas contas corretas */
-function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
-  const prod = state.products.find(p=>p.id===productId);
-  const fil = state.filaments.find(f=>f.id===filamentId);
-  const userAccount = state.accounts.find(a=>a.id===accountId);
-  if(!prod || !fil || !userAccount) {
-    alert('Produto/filamento/conta inválidos.');
-    return;
-  }
-
+function calcImp3dSaleMetrics(prod, fil, qty, pricePerUnit){
   qty = Number(qty || 0);
   pricePerUnit = Number(pricePerUnit || 0);
 
   const totalFilNeeded = Number(prod.fil_g || 0) * qty;
-
-  if(Number(fil.weight || 0) < totalFilNeeded){
-    if(!confirm(`Filamento selecionado tem ${Number(fil.weight||0).toFixed(2)} g — precisa de ${totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return;
-  }
 
   // custo do filamento
   const initial = Number(fil.initialWeight || fil.weight || 0);
@@ -1688,9 +1743,6 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   const packagingCostUnit = Number(prod.pack || 0);
   const packagingCostTotal = packagingCostUnit * qty;
 
-  // reinvestimento obrigatório
-  const mandatoryReinvest = materialCostTotal + hourlyCostTotal + packagingCostTotal;
-
   // taxas Shopee
   const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * Number(pricePerUnit || 0);
   const feeTotal = feePerUnit * qty;
@@ -1698,10 +1750,43 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   // valores
   const amountGross = Number(pricePerUnit || 0) * qty;
   const netReceived = amountGross - feeTotal;
+  const mandatoryReinvest = materialCostTotal + hourlyCostTotal + packagingCostTotal;
   const profit = netReceived - mandatoryReinvest;
 
+  return {
+    totalFilNeeded,
+    materialCostTotal,
+    hourlyCostTotal,
+    packagingCostTotal,
+    feeTotal,
+    amountGross,
+    netReceived,
+    mandatoryReinvest,
+    profit
+  };
+}
+
+/* vendendo: determinístico, registra entradas/despesas nas contas corretas */
+function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
+  const prod = state.products.find(p=>p.id===productId);
+  const fil = state.filaments.find(f=>f.id===filamentId);
+  const userAccount = state.accounts.find(a=>a.id===accountId);
+  if(!prod || !fil || !userAccount) {
+    alert('Produto/filamento/conta inválidos.');
+    return;
+  }
+
+  qty = Number(qty || 0);
+  pricePerUnit = Number(pricePerUnit || 0);
+
+  const calc = calcImp3dSaleMetrics(prod, fil, qty, pricePerUnit);
+
+  if(Number(fil.weight || 0) < calc.totalFilNeeded){
+    if(!confirm(`Filamento selecionado tem ${Number(fil.weight||0).toFixed(2)} g — precisa de ${calc.totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return;
+  }
+
   // baixa estoque
-  fil.weight = Number(fil.weight || 0) - totalFilNeeded;
+  fil.weight = Number(fil.weight || 0) - calc.totalFilNeeded;
 
   // registra venda
   const sale = {
@@ -1711,14 +1796,14 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
     filamentId,
     accountId: 'shopee',
     qty,
-    amountGross,
-    feeTotal,
-    netReceived,
-    materialCost: materialCostTotal,
-    hourlyCost: hourlyCostTotal,
-    packagingCost: packagingCostTotal,
-    mandatoryReinvest,
-    profit
+    amountGross: calc.amountGross,
+    feeTotal: calc.feeTotal,
+    netReceived: calc.netReceived,
+    materialCost: calc.materialCostTotal,
+    hourlyCost: calc.hourlyCostTotal,
+    packagingCost: calc.packagingCostTotal,
+    mandatoryReinvest: calc.mandatoryReinvest,
+    profit: calc.profit
   };
   state.impSales.push(sale);
 
@@ -1727,7 +1812,7 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
     id: 'imp3d-sale-' + Date.now().toString(),
     date: todayISO(),
     desc: `Venda ${prod.name} x${qty}`,
-    amount: Number(amountGross),
+    amount: Number(calc.amountGross),
     type: 'entrada',
     accountId: 'shopee',
     method: 'venda impressora3d',
@@ -1737,12 +1822,12 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   state.expenses.push(saleEntry);
 
   // taxa Shopee
-  if(feeTotal > 0){
+  if(calc.feeTotal > 0){
     const feeExp = {
       id: 'imp3d-shfee-' + Date.now().toString(),
       date: todayISO(),
       desc: `Taxa Shopee — ${prod.name} x${qty}`,
-      amount: Number(feeTotal),
+      amount: Number(calc.feeTotal),
       type: 'saldo',
       accountId: 'shopee',
       method: 'taxa_shopee',
@@ -1753,12 +1838,12 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   }
 
   // custo material
-  if(materialCostTotal > 0){
+  if(calc.materialCostTotal > 0){
     const matExp = {
       id: 'imp3d-mat-' + Date.now().toString(),
       date: todayISO(),
       desc: `Custo material ${prod.name} x${qty} (${fil.color})`,
-      amount: Number(materialCostTotal),
+      amount: Number(calc.materialCostTotal),
       type: 'saldo',
       accountId: 'imp3d',
       method: 'custo material',
@@ -1769,12 +1854,12 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   }
 
   // custo por hora
-  if(hourlyCostTotal > 0){
+  if(calc.hourlyCostTotal > 0){
     const hourExp = {
       id: 'imp3d-hour-' + Date.now().toString(),
       date: todayISO(),
       desc: `Custo hora ${prod.name} x${qty}`,
-      amount: Number(hourlyCostTotal),
+      amount: Number(calc.hourlyCostTotal),
       type: 'saldo',
       accountId: 'imp3d',
       method: 'custo hora',
@@ -1785,12 +1870,12 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
   }
 
   // custo embalagem
-  if(packagingCostTotal > 0){
+  if(calc.packagingCostTotal > 0){
     const packExp = {
       id: 'imp3d-pack-' + Date.now().toString(),
       date: todayISO(),
       desc: `Custo embalagem ${prod.name} x${qty}`,
-      amount: Number(packagingCostTotal),
+      amount: Number(calc.packagingCostTotal),
       type: 'saldo',
       accountId: 'imp3d',
       method: 'custo embalagem',
@@ -1805,14 +1890,14 @@ function sellProduct(productId, filamentId, accountId, qty, pricePerUnit){
 
   alert(
     `Venda registrada.\n` +
-    `Bruto: ${money(amountGross)}\n` +
-    `Taxa Shopee: ${money(feeTotal)}\n` +
-    `Líquido recebido: ${money(netReceived)}\n` +
-    `Reinvestimento obrigatório: ${money(mandatoryReinvest)}\n` +
-    ` - Filamento: ${money(materialCostTotal)}\n` +
-    ` - Custo por hora: ${money(hourlyCostTotal)}\n` +
-    ` - Embalagem: ${money(packagingCostTotal)}\n` +
-    `Lucro real: ${money(profit)}`
+    `Bruto: ${money(calc.amountGross)}\n` +
+    `Taxa Shopee: ${money(calc.feeTotal)}\n` +
+    `Líquido recebido: ${money(calc.netReceived)}\n` +
+    `Reinvestimento obrigatório: ${money(calc.mandatoryReinvest)}\n` +
+    ` - Filamento: ${money(calc.materialCostTotal)}\n` +
+    ` - Custo por hora: ${money(calc.hourlyCostTotal)}\n` +
+    ` - Embalagem: ${money(calc.packagingCostTotal)}\n` +
+    `Lucro real: ${money(calc.profit)}`
   );
 }
 
@@ -2168,27 +2253,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(qtyInput) qtyInput.value = '';
   });
 
-  const sellStockBtn = document.getElementById('sell-stock-btn');
-  if(sellStockBtn) sellStockBtn.addEventListener('click', ()=>{
-    const productId = document.getElementById('sell-stock-item')?.value || '';
-    const qty = Number(document.getElementById('sell-stock-qty')?.value || 0);
-
-    if(!productId || qty <= 0){
-      alert('Selecione um item em estoque e uma quantidade válida.');
-      return;
-    }
-
-    const prod = state.products.find(p=>p.id===productId);
-    if(!prod){
-      alert('Produto inválido.');
-      return;
-    }
-
-    // venda do estoque usando o preço cadastrado do produto
-    sellGroupedStock(productId, qty, Number(prod.price || 0), 'nubank');
-    const qtyInput = document.getElementById('sell-stock-qty');
-    if(qtyInput) qtyInput.value = '';
-  });
+    const sellStockBtn = document.getElementById('sell-stock-btn');
+    if(sellStockBtn) sellStockBtn.addEventListener('click', ()=>{
+      const productId = document.getElementById('sell-stock-item')?.value || '';
+      const qty = Number(document.getElementById('sell-stock-qty')?.value || 0);
+  
+      if(!productId || qty <= 0){
+        alert('Selecione um item em estoque e uma quantidade válida.');
+        return;
+      }
+  
+      const prod = state.products.find(p=>p.id===productId);
+      if(!prod){
+        alert('Produto inválido.');
+        return;
+      }
+  
+      sellGroupedStock(productId, qty, Number(prod.price || 0), 'nubank');
+  
+      const qtyInput = document.getElementById('sell-stock-qty');
+      if(qtyInput) qtyInput.value = '';
+    });
 
   // botão de transferência Shopee -> Nubank
   const shToNbBtn = document.getElementById('sh-to-nb');
