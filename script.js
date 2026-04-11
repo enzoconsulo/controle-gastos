@@ -1431,6 +1431,95 @@ function sellFromStock(stockId, accountId, pricePerUnit){
   alert(`Venda do estoque realizada!\nLucro: ${money(profit)}`);
 }
 
+function sellGroupedStock(productId, qtyToSell, pricePerUnit, accountId){
+  qtyToSell = Number(qtyToSell || 0);
+  pricePerUnit = Number(pricePerUnit || 0);
+
+  if(qtyToSell <= 0 || pricePerUnit <= 0){
+    alert('Quantidade ou preço inválidos.');
+    return;
+  }
+
+  const acc = state.accounts.find(a=>a.id===accountId);
+  if(!acc) return alert('Conta inválida');
+
+  let remaining = qtyToSell;
+
+  const items = state.impStock
+    .filter(s => s.productId === productId)
+    .sort((a,b)=> a.date > b.date ? 1 : -1);
+
+  let materialCost = 0;
+  let hourlyCost = 0;
+  let packagingCost = 0;
+
+  for(const item of items){
+    if(remaining <= 0) break;
+
+    const takeQty = Math.min(Number(item.qty || 0), remaining);
+    const ratio = takeQty / Number(item.qty || 1);
+
+    materialCost += Number(item.materialCost || 0) * ratio;
+    hourlyCost += Number(item.hourlyCost || 0) * ratio;
+    packagingCost += Number(item.packagingCost || 0) * ratio;
+
+    item.qty = Number(item.qty || 0) - takeQty;
+    remaining -= takeQty;
+  }
+
+  if(remaining > 0){
+    alert('Estoque insuficiente.');
+    return;
+  }
+
+  state.impStock = state.impStock.filter(s => Number(s.qty || 0) > 0);
+
+  const totalCost = materialCost + hourlyCost + packagingCost;
+  const amountGross = pricePerUnit * qtyToSell;
+  const profit = amountGross - totalCost;
+
+  const entry = {
+    id: 'imp3d-stock-sale-' + Date.now().toString(),
+    date: todayISO(),
+    desc: `Venda estoque`,
+    amount: amountGross,
+    type: 'entrada',
+    accountId: acc.id,
+    method: 'venda estoque',
+    category: 'impressora3d'
+  };
+  applyExpenseEffects(entry);
+  state.expenses.push(entry);
+
+  state.impSales.push({
+    id: Date.now().toString(),
+    date: todayISO(),
+    productId,
+    filamentId: 'estoque',
+    accountId: acc.id,
+    qty: qtyToSell,
+    amountGross,
+    feeTotal: 0,
+    netReceived: amountGross,
+    materialCost,
+    hourlyCost,
+    packagingCost,
+    mandatoryReinvest: totalCost,
+    profit,
+    channel: 'estoque'
+  });
+
+  saveState();
+  updateAll();
+
+  alert(
+    `Venda realizada!\n` +
+    `Qtd: ${qtyToSell}\n` +
+    `Custo: ${money(totalCost)}\n` +
+    `Lucro: ${money(profit)}`
+  );
+}
+
 function stockProduct(productId, filamentId, qty){
   const prod = state.products.find(p=>p.id===productId);
   const fil = state.filaments.find(f=>f.id===filamentId);
@@ -1445,17 +1534,13 @@ function stockProduct(productId, filamentId, qty){
     if(!confirm('Filamento insuficiente. Deseja permitir negativo?')) return;
   }
 
-  // custo material
   const pricePerGram = getFilamentPricePerGram(fil);
   const materialCost = totalFilNeeded * pricePerGram;
-
   const hourlyCost = (Number(prod.hours || 0) * Number(prod.energy_h || 0)) * qty;
   const packagingCost = (Number(prod.pack || 0)) * qty;
 
-  // baixa estoque de filamento
-  fil.weight -= totalFilNeeded;
+  fil.weight = Number(fil.weight || 0) - totalFilNeeded;
 
-  // registra estoque
   state.impStock.push({
     id: Date.now().toString(),
     date: todayISO(),
@@ -1467,28 +1552,28 @@ function stockProduct(productId, filamentId, qty){
     packagingCost
   });
 
-  // registra custos (igual venda, MAS sem receita)
   const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
-
-  const pushCost = (desc, amount, category)=>{
-    if(amount <= 0) return;
-    const exp = {
-      id: 'imp3d-stock-' + Date.now().toString(),
-      date: todayISO(),
-      desc,
-      amount,
-      type: 'saldo',
-      accountId: imp3dAcc.id,
-      method: 'produção estoque',
-      category
+  if(imp3dAcc){
+    const pushCost = (desc, amount, category)=>{
+      if(amount <= 0) return;
+      const exp = {
+        id: 'imp3d-stock-' + Date.now().toString(),
+        date: todayISO(),
+        desc,
+        amount,
+        type: 'saldo',
+        accountId: imp3dAcc.id,
+        method: 'produção estoque',
+        category
+      };
+      applyExpenseEffects(exp);
+      state.expenses.push(exp);
     };
-    applyExpenseEffects(exp);
-    state.expenses.push(exp);
-  };
 
-  pushCost(`Produção (material) ${prod.name}`, materialCost, 'custo_material');
-  pushCost(`Produção (hora) ${prod.name}`, hourlyCost, 'custo_hora');
-  pushCost(`Produção (embalagem) ${prod.name}`, packagingCost, 'custo_embalagem');
+    pushCost(`Produção (material) ${prod.name}`, materialCost, 'custo_material');
+    pushCost(`Produção (hora) ${prod.name}`, hourlyCost, 'custo_hora');
+    pushCost(`Produção (embalagem) ${prod.name}`, packagingCost, 'custo_embalagem');
+  }
 
   saveState();
   updateAll();
@@ -1664,17 +1749,26 @@ function renderImpStock(){
 
   el.innerHTML = '';
 
-  state.impStock.forEach(s=>{
-    const prod = state.products.find(p=>p.id===s.productId) || {name:'?'};
+  const grouped = getGroupedStock();
+
+  if(!grouped.length){
+    el.innerHTML = `<tr><td colspan="5">Nenhum item em estoque</td></tr>`;
+    return;
+  }
+
+  grouped.forEach(g=>{
+    const prod = state.products.find(p=>p.id===g.productId) || {name:'?'};
+    const totalCost = g.materialCost + g.hourlyCost + g.packagingCost;
+    const costPerUnit = g.qty > 0 ? totalCost / g.qty : 0;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${s.date}</td>
       <td>${prod.name}</td>
-      <td>${s.qty}</td>
-      <td>${money(s.materialCost)}</td>
+      <td>${g.qty}</td>
+      <td>${money(costPerUnit)}</td>
+      <td>${money(totalCost)}</td>
       <td>
-        <button class="btn small sell-stock" data-id="${s.id}">Vender</button>
+        <button class="btn small sell-stock" data-id="${g.productId}">Vender</button>
       </td>
     `;
     el.appendChild(tr);
@@ -1682,17 +1776,29 @@ function renderImpStock(){
 
   el.querySelectorAll('.sell-stock').forEach(btn=>{
     btn.addEventListener('click', e=>{
-      const id = e.target.dataset.id;
+      const productId = e.target.dataset.id;
+      const group = grouped.find(g=>g.productId === productId);
+      if(!group) return;
 
-      const price = Number(prompt('Preço por unidade:','0'));
-      if(!price || price<=0) return;
+      const qty = Number(prompt(`Quantidade para vender (máx ${group.qty}):`, '1') || 0);
+      if(!qty || qty <= 0 || qty > group.qty){
+        alert('Quantidade inválida');
+        return;
+      }
 
-      const acc = prompt('Conta (id):','nubank') || 'nubank';
+      const price = Number(prompt('Preço por unidade:', '0') || 0);
+      if(!price || price <= 0){
+        alert('Preço inválido');
+        return;
+      }
 
-      sellFromStock(id, acc, price);
+      const accId = prompt('Conta (id):', 'nubank') || 'nubank';
+      sellGroupedStock(productId, qty, price, accId);
     });
   });
 }
+
+
 
 /* render vendas - agora mostra colunas com cálculo e soma total recebido / lucro */
 function renderImpSales(){
@@ -1753,6 +1859,31 @@ function renderImpLosses(){
     tr.innerHTML = `<td>${l.date}</td><td>${fil.color||fil.id}</td><td>${Number(l.grams).toFixed(2)}</td><td>${money(l.cost)}</td><td>${l.reason||''}</td>`;
     tbody.appendChild(tr);
   });
+}
+
+function getGroupedStock(){
+  const map = {};
+
+  state.impStock.forEach(s => {
+    if(!map[s.productId]){
+      map[s.productId] = {
+        productId: s.productId,
+        qty: 0,
+        materialCost: 0,
+        hourlyCost: 0,
+        packagingCost: 0,
+        items: []
+      };
+    }
+
+    map[s.productId].qty += Number(s.qty || 0);
+    map[s.productId].materialCost += Number(s.materialCost || 0);
+    map[s.productId].hourlyCost += Number(s.hourlyCost || 0);
+    map[s.productId].packagingCost += Number(s.packagingCost || 0);
+    map[s.productId].items.push(s);
+  });
+
+  return Object.values(map);
 }
 
 /* export/import especifico Impressora3D (mantido) */
