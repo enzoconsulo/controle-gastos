@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Impressora3D — Filamentos</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <link rel="stylesheet" href="imp3d-pages.css"/>
+</head>
+<body class="app-shell">
+  <header class="imp3d-topbar">
+    <a class="imp3d-back" href="index.html">← Voltar</a>
+    <div class="imp3d-page-title">
+      <h2>Filamentos</h2>
+      <p>Estoque base e custo por rolo</p>
+    </div>
+  </header>
+
+  <main class="wrap app-main imp3d-page">
+    <section class="imp3d-folder">
+      <div class="imp3d-folder-head">
+        <div>
+          <span class="imp3d-folder-kicker">Arquivo 01</span>
+          <h3 class="card-title">🧵 Estoque de filamentos</h3>
+        </div>
+        <span class="imp3d-folder-badge">Base de custo</span>
+      </div>
+
+      <p class="panel-subtitle">Adicione filamentos (cor, tipo, peso em gramas e preço em R$).</p>
+
+      <div class="form-grid imp3d-form-grid">
+        <div class="form-field">
+          <label>Cor</label>
+          <input id="fil-color" type="text" placeholder="Ex: Preto, Branco, Azul..."/>
+        </div>
+        <div class="form-field">
+          <label>Tipo</label>
+          <input id="fil-type" type="text" placeholder="Ex: PLA, PETG, ABS..."/>
+        </div>
+        <div class="form-field">
+          <label>Peso (g)</label>
+          <input id="fil-weight" type="number" step="0.01" placeholder="Quantidade em gramas"/>
+        </div>
+        <div class="form-field">
+          <label>Preço (R$) — preço total do rolo</label>
+          <input id="fil-price" type="number" step="0.01" placeholder="Preço do filamento (R$)"/>
+        </div>
+        <div class="form-actions">
+          <button id="fil-add" class="btn-primary" type="button">Adicionar ao estoque</button>
+        </div>
+      </div>
+
+      <div class="imp3d-list-head">
+        <h4>Lista de filamentos</h4>
+        <span class="imp3d-mini-note" id="imp3d-total-fil">0 g</span>
+      </div>
+      <div id="filaments-list" class="imp3d-list"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../script.js?v=8"></script>
+  <script src="../sync-pluggy-ui.js?v=8"></script>
+</body>
+</html>
