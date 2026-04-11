@@ -26,6 +26,7 @@ const DEFAULT = {
   products: [],       // {id,name,hours,fil_g,price,desc}
   impSales: [],       // {id,date,productId,filamentId,accountId,qty,amountGross,feeTotal,netReceived,materialCost,profit}
   impLosses: [],      // {id,date,filamentId,grams,cost,reason}
+  impExternalSales: [],
   meta: { baseMonth: null, activeOffset: 0, lastCreditClosed: null }
 };
 
@@ -80,6 +81,7 @@ function loadState(){
       }
       if(!s.impSales) s.impSales = [];
       if(!s.impLosses) s.impLosses = [];
+      if(!s.impExternalSales) s.impExternalSales = [];
       // garantir contas imp3d / shopee em states antigos
       const hasImp3d = (s.accounts || []).some(a=>a.id === 'imp3d');
       const hasShopee = (s.accounts || []).some(a=>a.id === 'shopee');
@@ -966,6 +968,12 @@ function handleBackupImport(e){
 
 /* ---------- IMPRESSORA3D: UI + lógica (ajustes e correções) ---------- */
 
+function getFilamentPricePerGram(f){
+  const initial = Number(f.initialWeight || f.weight || 0);
+  const price = Number(f.price || 0);
+  return initial > 0 ? (price / initial) : 0;
+}
+
 /* Render lista de filamentos */
 function renderFilaments(){
   const container = document.getElementById('filaments-list');
@@ -1034,59 +1042,154 @@ function renderFilaments(){
     });
   });
 
-  container.querySelectorAll('.fil-withdraw').forEach(b=>{
-    b.addEventListener('click', e=>{
-      const id = e.target.dataset.id;
-      const f = state.filaments.find(x=>x.id===id);
-      if(!f) return;
-      const gramsStr = prompt(`Quantos gramas deseja retirar do filamento "${f.color} — ${f.type}"?`, '0');
-      if(gramsStr === null) return;
-      const grams = Number(gramsStr || 0);
-      if(!grams || grams <= 0){ alert('Quantidade inválida'); return; }
-      const costStr = prompt('Qual o custo dessa retirada em R$? (ex: 3.50)', '0');
-      if(costStr === null) return;
-      const cost = Number(costStr || 0);
-      const reason = prompt('Motivo (opcional):', 'Perda / falha de impressão') || '';
 
-      if(Number(f.weight || 0) < grams){
-        if(!confirm(`Filamento tem ${Number(f.weight||0).toFixed(2)} g, você quer permitir ficar negativo?`)) return;
-      }
-
-      // subtrai filamento
-      f.weight = Number(f.weight || 0) - grams;
-
-      // registra perda em impLosses
-      const loss = {
-        id: 'loss-' + Date.now().toString(),
-        date: todayISO(),
-        filamentId: id,
-        grams: Number(grams),
-        cost: Number(cost),
-        reason: reason
-      };
-      state.impLosses.push(loss);
-
-      // registra despesa no log principal (conta imp3d)
-      const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
-      const accId = imp3dAcc ? imp3dAcc.id : (state.accounts[0] && state.accounts[0].id);
-      const exp = {
-        id: 'imp3d-loss-exp-' + Date.now().toString(),
-        date: todayISO(),
-        desc: `Retirada filamento ${f.color} (${reason||'perda'})`,
-        amount: Number(cost || 0),
-        type: 'saldo',
-        accountId: accId,
-        method: 'retirada filamento',
-        category: 'filamento_perda'
-      };
-      applyExpenseEffects(exp);
-      state.expenses.push(exp);
-
-      saveState();
-      updateAll();
-      alert(`Retirada registrada: ${grams} g / ${money(cost)}.`);
+    container.querySelectorAll('.fil-withdraw').forEach(b=>{
+      b.addEventListener('click', e=>{
+        const id = e.target.dataset.id;
+        const f = state.filaments.find(x => x.id === id);
+        if(!f) return;
+    
+        const mode = prompt(
+          'Escolha o tipo de retirada:\n1 = Perda / prejuízo (custo automático)\n2 = Venda externa (sem taxa, com frete opcional)',
+          '1'
+        );
+        if(mode === null) return;
+    
+        const gramsStr = prompt(`Quantos gramas deseja retirar do filamento "${f.color} — ${f.type}"?`, '0');
+        if(gramsStr === null) return;
+    
+        const grams = Number(gramsStr || 0);
+        if(!grams || grams <= 0){
+          alert('Quantidade inválida');
+          return;
+        }
+    
+        const unitCost = getFilamentPricePerGram(f);
+        const autoCost = grams * unitCost;
+    
+        if(Number(f.weight || 0) < grams){
+          if(!confirm(`Filamento tem ${Number(f.weight || 0).toFixed(2)} g, deseja permitir ficar negativo?`)) return;
+        }
+    
+        const modeNum = String(mode).trim();
+    
+        // 1) PERDA / PREJUÍZO
+        if(modeNum === '1'){
+          const reason = prompt('Motivo (opcional):', 'Perda / falha de impressão') || '';
+    
+          f.weight = Number(f.weight || 0) - grams;
+    
+          state.impLosses.push({
+            id: 'loss-' + Date.now().toString(),
+            date: todayISO(),
+            filamentId: id,
+            grams: Number(grams),
+            unitCost: Number(unitCost),
+            cost: Number(autoCost),
+            reason: reason,
+            mode: 'perda'
+          });
+    
+          saveState();
+          updateAll();
+    
+          alert(`Perda registrada.\n${grams} g × ${money(unitCost)} = ${money(autoCost)}`);
+          return;
+        }
+    
+        // 2) VENDA EXTERNA / SAÍDA FORA DA PLATAFORMA
+        if(modeNum === '2'){
+          const grossStr = prompt('Valor pago pelo cliente (R$):', '0');
+          if(grossStr === null) return;
+          const gross = Number(grossStr || 0);
+          if(!gross || gross <= 0){
+            alert('Valor inválido');
+            return;
+          }
+    
+          const freightStr = prompt('Custo de frete (R$) — deixe 0 se não houver:', '0');
+          if(freightStr === null) return;
+          const freightCost = Number(freightStr || 0);
+    
+          const accountChoice = prompt(
+            'Digite o ID da conta que recebeu o valor:\n' +
+            state.accounts.map(a => `${a.name} => ${a.id}`).join('\n'),
+            'nubank'
+          ) || 'nubank';
+    
+          const acc = state.accounts.find(a => a.id === accountChoice.trim()) ||
+                      state.accounts.find(a => a.id === 'nubank') ||
+                      state.accounts[0];
+    
+          if(!acc){
+            alert('Conta inválida');
+            return;
+          }
+    
+          f.weight = Number(f.weight || 0) - grams;
+    
+          const saleEntry = {
+            id: 'imp3d-ext-sale-' + Date.now().toString(),
+            date: todayISO(),
+            desc: `Venda externa (${f.color} — ${f.type})`,
+            amount: Number(gross),
+            type: 'entrada',
+            accountId: acc.id,
+            method: 'venda externa',
+            category: 'venda_externa'
+          };
+          applyExpenseEffects(saleEntry);
+          state.expenses.push(saleEntry);
+    
+          if(freightCost > 0){
+            const freightExp = {
+              id: 'imp3d-ext-freight-' + Date.now().toString(),
+              date: todayISO(),
+              desc: `Frete venda externa (${f.color} — ${f.type})`,
+              amount: Number(freightCost),
+              type: 'saldo',
+              accountId: acc.id,
+              method: 'frete externo',
+              category: 'frete_externo'
+            };
+            applyExpenseEffects(freightExp);
+            state.expenses.push(freightExp);
+          }
+    
+          state.impSales.push({
+            id: 'imp3d-ext-' + Date.now().toString(),
+            date: todayISO(),
+            productId: 'Venda externa',
+            filamentId: id,
+            accountId: acc.id,
+            qty: Number(grams),
+            amountGross: Number(gross),
+            feeTotal: 0,
+            netReceived: Number(gross - freightCost),
+            materialCost: Number(autoCost),
+            hourlyCost: 0,
+            packagingCost: 0,
+            mandatoryReinvest: Number(autoCost + freightCost),
+            profit: Number(gross - freightCost - autoCost),
+            channel: 'externa'
+          });
+    
+          saveState();
+          updateAll();
+    
+          alert(
+            `Venda externa registrada.\n` +
+            `Bruto: ${money(gross)}\n` +
+            `Frete: ${money(freightCost)}\n` +
+            `Material: ${money(autoCost)}\n` +
+            `Lucro: ${money(gross - freightCost - autoCost)}`
+          );
+          return;
+        }
+    
+        alert('Opção inválida.');
+      });
     });
-  });
 
   const total = sum(state.filaments, x=>x.weight||0);
   if(document.getElementById('imp3d-total-fil')) document.getElementById('imp3d-total-fil').textContent = `${total.toFixed(2)} g`;
@@ -1431,7 +1534,7 @@ function renderImpSales(){
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${s.date}</td>
-      <td>${prod.name}</td>
+      <td>${s.channel === 'externa' ? `${prod.name} (externa)` : prod.name}</td>
       <td>${fil.color||fil.id}</td>
       <td>${s.qty}</td>
       <td>${money(s.amountGross||0)}</td>
