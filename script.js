@@ -2219,13 +2219,12 @@ function updateImp3dAccountBalances(){
   const shopeeAcc = state.accounts.find(a => a.id === 'shopee');
 
   if(imp3dEl){
-    imp3dEl.textContent = imp3dAcc ? money(imp3dAcc.balance || 0) : '—';
+    imp3dEl.textContent = imp3dAcc ? money(imp3dAcc.saldo || 0) : '—';
   }
 
   if(shopeeEl){
-    shopeeEl.textContent = shopeeAcc ? money(shopeeAcc.balance || 0) : '—';
+    shopeeEl.textContent = shopeeAcc ? money(shopeeAcc.saldo || 0) : '—';
   }
-  console.log(state.accounts);
 }
 
 function updateAll(){
