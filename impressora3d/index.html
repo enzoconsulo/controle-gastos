@@ -121,7 +121,14 @@
   </style>
 </head>
 
-<div class="month-incrementer app-month-bar" style="margin:12px 12px 8px;">
+<body>
+
+  <div class="app-header">
+    <button class="back-btn" onclick="history.back()">←</button>
+    <div class="app-title">Impressora 3D</div>
+  </div>
+
+  <div class="month-incrementer app-month-bar" style="margin:12px 12px 8px;">
     <button id="prev-month" class="pill-btn">‹</button>
     <div class="month-display">
       <span class="month-caption">Índice do mês</span>
@@ -131,16 +138,8 @@
     <button id="next-month" class="pill-btn">›</button>
   </div>
 
-<body>
-
-  <div class="app-header">
-    <button class="back-btn" onclick="history.back()">←</button>
-    <div class="app-title">Impressora 3D</div>
-  </div>
-
   <div class="imp3d-container">
 
-    <!-- RESUMO -->
     <div class="summary-card">
       <div style="font-weight:700;">Resumo rápido</div>
 
@@ -167,17 +166,7 @@
       </div>
     </div>
 
-    <!-- GRID -->
     <div class="grid">
-
-      <a class="card full" href="../index.html#tab-imp3d">
-        <div class="icon">⌂</div>
-        <div>
-          <div class="card-title">Voltar ao painel</div>
-          <div class="card-text">Retornar para o app principal</div>
-        </div>
-      </a>
-
       <a class="card" href="filamentos.html">
         <div class="icon">🧵</div>
         <div>
@@ -217,7 +206,6 @@
           <div class="card-text">Controle de prejuízo</div>
         </div>
       </a>
-
     </div>
   </div>
 
