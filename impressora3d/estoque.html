@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Impressora3D — Estoque</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <link rel="stylesheet" href="imp3d-pages.css"/>
+</head>
+<body class="app-shell">
+  <header class="imp3d-topbar">
+    <a class="imp3d-back" href="index.html">← Voltar</a>
+    <div class="imp3d-page-title">
+      <h2>Estoque</h2>
+      <p>Produção, lotes e venda posterior</p>
+    </div>
+  </header>
+
+  <main class="wrap app-main imp3d-page">
+    <section class="imp3d-folder">
+      <div class="imp3d-folder-head">
+        <div>
+          <span class="imp3d-folder-kicker">Arquivo 03</span>
+          <h3 class="card-title">🏭 Estocar produto</h3>
+        </div>
+        <span class="imp3d-folder-badge">Lote congelado</span>
+      </div>
+
+      <p class="panel-subtitle">Produza itens sem contabilizar venda ainda.</p>
+
+      <div class="form-grid imp3d-form-grid">
+        <div class="form-field">
+          <label>Produto</label>
+          <select id="stock-prod"></select>
+        </div>
+        <div class="form-field">
+          <label>Filamento</label>
+          <select id="stock-fil"></select>
+        </div>
+        <div class="form-field">
+          <label>Quantidade</label>
+          <input id="stock-qty" type="number" step="1" placeholder="Qtd"/>
+        </div>
+        <div class="form-field">
+          <label>Observação</label>
+          <input id="stock-note" type="text" placeholder="Opcional"/>
+        </div>
+        <div class="form-actions">
+          <button id="stock-add" class="btn-primary" type="button">Estocar produto</button>
+        </div>
+      </div>
+
+      <div class="imp3d-list-head">
+        <h4>Estoque de produtos</h4>
+        <span class="imp3d-mini-note">por lote</span>
+      </div>
+      <div class="table-wrapper imp3d-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>Qtd</th>
+              <th>Custo médio/un</th>
+              <th>Custo total</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="imp3d-stock-body"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:14px">
+        <h3 class="card-title">Vender lote</h3>
+        <div class="form-grid imp3d-form-grid">
+          <div class="form-field">
+            <label>Item em estoque</label>
+            <select id="sell-stock-item"></select>
+          </div>
+          <div class="form-field">
+            <label>Quantidade</label>
+            <input id="sell-stock-qty" type="number" step="1"/>
+          </div>
+          <div class="form-actions">
+            <button id="sell-stock-btn" class="btn-primary" type="button">Vender do estoque</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../script.js?v=8"></script>
+  <script src="../sync-pluggy-ui.js?v=8"></script>
+</body>
+</html>
