@@ -128,6 +128,21 @@ body{
 .panel-card-full{ grid-column:1/-1; }
 .card-title{ font-size:0.9rem; font-weight:600; margin-bottom:6px; }
 
+.card-header-inline{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-top:12px;
+}
+.inline-toggle{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:var(--muted);
+  font-size:0.8rem;
+}
+
 /* accounts table */
 .accounts-table{ width:100%; border-collapse:collapse; font-size:0.86rem; }
 .accounts-table thead th{
@@ -143,7 +158,7 @@ body{
   border-radius:10px;
   box-shadow:0 10px 25px rgba(0,0,0,0.45);
 }
-.y-row{ display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:0.9rem; }
+.y-row{ display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:0.9rem; gap:10px; }
 .y-row span{ opacity:0.9; }
 .y-row strong{ font-weight:700; font-size:0.97rem; }
 
@@ -307,11 +322,295 @@ tbody td{ padding:8px; border-bottom:1px solid rgba(15,23,42,0.9); color:var(--t
 .backup-controls{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; align-items:center; }
 .backup-controls input{ display:none; }
 
-/* small responsive adjustments */
+/* protect charts from expanding cards unexpectedly */
+canvas{ max-width:100% !important; height:100% !important; display:block; }
+
+/* ===== Impressora3D — visual novo, sem interferir nas outras abas ===== */
+select[id^="sell-"]{
+  color:#FFD54F !important;
+}
+select[id^="sell-"] option{
+  color:#000;
+}
+#tab-imp3d{
+  scroll-margin-top:20px;
+}
+#tab-imp3d .imp3d-shell{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+#tab-imp3d .imp3d-hero{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:flex-start;
+  padding:14px;
+  border-radius:18px;
+  background:linear-gradient(135deg, rgba(34,197,94,0.13), rgba(2,6,23,0.98) 45%, rgba(14,165,233,0.08));
+  border:1px solid rgba(148,163,184,0.16);
+  box-shadow:0 18px 40px rgba(2,6,23,0.45);
+}
+#tab-imp3d .imp3d-hero-copy{
+  min-width:0;
+}
+#tab-imp3d .imp3d-eyebrow{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:0.72rem;
+  font-weight:700;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:#86efac;
+  margin-bottom:8px;
+}
+#tab-imp3d .imp3d-hero-text{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:0.92rem;
+  max-width:62ch;
+}
+#tab-imp3d .imp3d-hero-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+#tab-imp3d .imp3d-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  text-decoration:none;
+  padding:9px 12px;
+  border-radius:999px;
+  border:1px solid rgba(148,163,184,0.18);
+  background:rgba(15,23,42,0.72);
+  color:var(--text);
+  font-size:0.86rem;
+  box-shadow:0 8px 18px rgba(0,0,0,0.18);
+}
+#tab-imp3d .imp3d-chip:hover{
+  transform:translateY(-1px);
+  border-color:rgba(34,197,94,0.35);
+  background:rgba(34,197,94,0.12);
+}
+#tab-imp3d .imp3d-grid{
+  display:grid;
+  grid-template-columns:1.15fr 0.95fr;
+  gap:12px;
+}
+#tab-imp3d .imp3d-col{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-width:0;
+}
+#tab-imp3d .imp3d-folder{
+  background:linear-gradient(180deg, rgba(11,16,32,0.98), rgba(6,10,22,0.98));
+  border:1px solid rgba(148,163,184,0.12);
+  border-radius:18px;
+  padding:12px;
+  box-shadow:0 16px 34px rgba(2,6,23,0.4);
+}
+#tab-imp3d .imp3d-folder-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+  margin-bottom:8px;
+}
+#tab-imp3d .imp3d-folder-kicker{
+  display:block;
+  font-size:0.7rem;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:#86efac;
+  margin-bottom:4px;
+}
+#tab-imp3d .imp3d-folder-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:0.74rem;
+  color:#d1fae5;
+  background:rgba(34,197,94,0.12);
+  border:1px solid rgba(34,197,94,0.16);
+  white-space:nowrap;
+}
+#tab-imp3d .imp3d-folder .panel-subtitle{
+  color:var(--muted);
+  margin-bottom:10px;
+}
+#tab-imp3d .imp3d-form-grid{
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+}
+#tab-imp3d .imp3d-folder .form-field input,
+#tab-imp3d .imp3d-folder .form-field select{
+  background:#020617;
+  border-color:rgba(148,163,184,0.18);
+}
+#tab-imp3d .imp3d-folder .form-field input:focus,
+#tab-imp3d .imp3d-folder .form-field select:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(34,197,94,0.08);
+}
+#tab-imp3d .imp3d-list-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-top:12px;
+  margin-bottom:8px;
+}
+#tab-imp3d .imp3d-list-head h4{
+  font-size:0.9rem;
+  font-weight:700;
+}
+#tab-imp3d .imp3d-mini-note{
+  font-size:0.76rem;
+  color:var(--muted);
+  background:rgba(148,163,184,0.08);
+  border:1px solid rgba(148,163,184,0.12);
+  padding:5px 9px;
+  border-radius:999px;
+}
+#tab-imp3d .imp3d-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+#tab-imp3d .imp3d-list .box-card{
+  background:linear-gradient(180deg, rgba(2,6,23,0.98), rgba(15,23,42,0.92));
+  border-color:rgba(148,163,184,0.14);
+}
+#tab-imp3d .imp3d-summary-folder .yellow-grid{
+  border-radius:14px;
+}
+#tab-imp3d .imp3d-summary-grid{
+  box-shadow:0 14px 30px rgba(0,0,0,0.25);
+}
+#tab-imp3d .imp3d-table-wrap{
+  max-height:320px;
+  overflow:auto;
+}
+#tab-imp3d .imp3d-wide-table{
+  min-width:980px;
+}
+#tab-imp3d .imp3d-action-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:8px;
+}
+#tab-imp3d .imp3d-action-grid .btn,
+#tab-imp3d .imp3d-action-grid .btn-primary{
+  width:100%;
+  justify-content:center;
+}
+#tab-imp3d .imp3d-folder .table-wrapper{
+  border-radius:14px;
+  background:rgba(2,6,23,0.9);
+}
+#tab-imp3d .imp3d-folder table{
+  min-width:unset;
+}
+#tab-imp3d .imp3d-folder thead th{
+  background:#020617;
+  font-size:0.78rem;
+}
+#tab-imp3d .imp3d-folder tbody td{
+  font-size:0.83rem;
+}
+#tab-imp3d .imp3d-folder .btn.small{
+  border-radius:999px;
+}
+#tab-imp3d .imp3d-sell-preview{
+  margin-top:10px;
+  padding:12px;
+  border-radius:14px;
+  background:linear-gradient(135deg, rgba(255, 231, 163, 0.08), rgba(34,197,94,0.05));
+  border:1px solid rgba(255,215,64,0.12);
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:10px;
+}
+#tab-imp3d .imp3d-sell-preview div{
+  min-width:0;
+  padding:10px;
+  border-radius:12px;
+  background:rgba(2,6,23,0.5);
+  border:1px solid rgba(148,163,184,0.1);
+}
+#tab-imp3d .imp3d-sell-preview .label{
+  color:var(--muted);
+  font-size:0.74rem;
+  display:block;
+}
+#tab-imp3d .imp3d-sell-preview .value{
+  font-weight:800;
+  margin-top:4px;
+  display:block;
+  font-size:0.92rem;
+}
+#tab-imp3d .table-wrapper{
+  -webkit-overflow-scrolling:touch;
+}
+#tab-imp3d .table-wrapper::-webkit-scrollbar{
+  height:10px;
+  width:10px;
+}
+#tab-imp3d .table-wrapper::-webkit-scrollbar-thumb{
+  background:rgba(148,163,184,0.28);
+  border-radius:999px;
+}
+#tab-imp3d .table-wrapper::-webkit-scrollbar-track{
+  background:rgba(2,6,23,0.55);
+}
+#tab-imp3d .panel-title{
+  letter-spacing:0.2px;
+}
+#tab-imp3d .panel-subtitle{
+  line-height:1.45;
+}
+
+/* mobile */
 @media (max-width:900px){
   .panel-grid{ grid-template-columns:1fr; }
   .invest-grid{ grid-template-columns:1fr; }
   .chart-wrapper{ max-height:220px; min-height:130px; }
+
+  #tab-imp3d .imp3d-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+@media (max-width:700px){
+  #tab-imp3d .imp3d-hero{
+    flex-direction:column;
+  }
+
+  #tab-imp3d .imp3d-hero-actions{
+    justify-content:flex-start;
+  }
+
+  #tab-imp3d .imp3d-chip{
+    width:calc(50% - 4px);
+    justify-content:center;
+  }
+
+  #tab-imp3d .imp3d-sell-preview{
+    grid-template-columns:1fr 1fr;
+  }
+
+  #tab-imp3d .imp3d-wide-table{
+    min-width:920px;
+  }
+
+  #tab-imp3d .imp3d-table-wrap{
+    overflow-x:auto;
+  }
 }
 
 @media (max-width:600px){
@@ -326,70 +625,30 @@ tbody td{ padding:8px; border-bottom:1px solid rgba(15,23,42,0.9); color:var(--t
   .accounts-table thead th, thead th{ font-size:0.78rem; }
   .accounts-table tbody td, tbody td{ font-size:0.9rem; padding:9px 6px; }
   .box-grid{ grid-template-columns:1fr; }
-}
 
-/* protect charts from expanding cards unexpectedly */
-canvas{ max-width:100% !important; height:100% !important; display:block; }
-
-/* ===== Ajustes mobile da aba Impressora3D ===== */
-@media (max-width: 700px){
-  #tab-imp3d .panel-grid{
-    grid-template-columns: 1fr;
-    gap: 10px;
+  #tab-imp3d .imp3d-chip{
+    width:100%;
   }
 
-  #tab-imp3d .form-grid{
-    grid-template-columns: 1fr;
+  #tab-imp3d .imp3d-folder{
+    padding:11px;
+    border-radius:16px;
   }
 
-  #tab-imp3d .panel-card{
-    overflow: hidden;
+  #tab-imp3d .imp3d-folder-head{
+    flex-direction:column;
+    align-items:flex-start;
   }
 
-  #tab-imp3d .yellow-grid{
-    padding: 10px;
-  }
-
-  #tab-imp3d .y-row{
-    gap: 10px;
-    align-items: flex-start;
-  }
-
-  #tab-imp3d .y-row span,
-  #tab-imp3d .y-row strong{
-    font-size: 0.85rem;
-  }
-
-  #tab-imp3d .table-wrapper{
-    overflow-x: auto;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  #tab-imp3d table{
-    min-width: 900px;
-  }
-
-  #tab-imp3d [id^="imp3d-sell-form-"]{
-    overflow-x: auto;
-  }
-
-  #tab-imp3d [id^="imp3d-sell-form-"] > div:first-child{
-    min-width: 680px;
+  #tab-imp3d .imp3d-folder-badge{
+    align-self:flex-start;
   }
 
   #tab-imp3d .imp3d-sell-preview{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns:1fr;
   }
 
-  #tab-imp3d .imp3d-sell-preview div{
-    min-width: 0;
-  }
-
-  #tab-imp3d .btn,
-  #tab-imp3d .btn-primary{
-    width: 100%;
+  #tab-imp3d .imp3d-wide-table{
+    min-width:860px;
   }
 }
