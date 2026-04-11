@@ -1370,11 +1370,22 @@ function renderProducts(){
       openSellFormForProduct(id, e.target);
     });
   });
-
+  
   container.querySelectorAll('.prod-stock').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-      window.location.href = `impressora3d/estoque.html?prod=${encodeURIComponent(id)}`;
+      
+      // 1. Seleciona automaticamente o produto no formulário de produção
+      const stockProdSel = document.getElementById('stock-prod');
+      if (stockProdSel) stockProdSel.value = id;
+      
+      // 2. Foca no campo de quantidade para você só precisar digitar o número
+      const qtyInput = document.getElementById('stock-qty');
+      if (qtyInput) qtyInput.focus();
+      
+      // 3. Rola a tela suavemente até a seção "Estocar produto"
+      const producaoSection = document.getElementById('imp3d-producao');
+      if (producaoSection) producaoSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
