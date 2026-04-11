@@ -1685,8 +1685,6 @@ function renderImpStock(){
 /* render vendas - agora mostra colunas com cálculo e soma total recebido / lucro */
 function renderImpSales(){
   const tbody = document.getElementById('imp3d-sales-body');
-  if(!tbody) return;
-  tbody.innerHTML = '';
 
   const arr = [...state.impSales].sort((a,b)=> a.date < b.date ? 1 : -1);
 
@@ -1694,27 +1692,33 @@ function renderImpSales(){
   let totalProfit = 0;
   let totalMandatoryReinvest = 0;
 
+  if(tbody){
+    tbody.innerHTML = '';
+
+    arr.forEach(s=>{
+      const prod = state.products.find(p=>p.id===s.productId) || {name:s.productId};
+      const fil = state.filaments.find(f=>f.id===s.filamentId) || {color:s.filamentId};
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${s.date}</td>
+        <td>${prod.name}</td>
+        <td>${fil.color||fil.id}</td>
+        <td>${s.qty}</td>
+        <td>${money(s.amountGross||0)}</td>
+        <td>${money(s.feeTotal||0)}</td>
+        <td>${money(s.netReceived||0)}</td>
+        <td>${money(s.materialCost||0)}</td>
+        <td>${money(s.hourlyCost||0)}</td>
+        <td>${money(s.packagingCost||0)}</td>
+        <td>${money(s.mandatoryReinvest||0)}</td>
+        <td>${money(s.profit||0)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
   arr.forEach(s=>{
-    const prod = state.products.find(p=>p.id===s.productId) || {name:s.productId};
-    const fil = state.filaments.find(f=>f.id===s.filamentId) || {color:s.filamentId};
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${s.date}</td>
-      <td>${s.channel === 'externa' ? `${prod.name} (externa)` : prod.name}</td>
-      <td>${fil.color||fil.id}</td>
-      <td>${s.qty}</td>
-      <td>${money(s.amountGross||0)}</td>
-      <td>${money(s.feeTotal||0)}</td>
-      <td>${money(s.netReceived||0)}</td>
-      <td>${money(s.materialCost||0)}</td>
-      <td>${money(s.hourlyCost||0)}</td>
-      <td>${money(s.packagingCost||0)}</td>
-      <td>${money(s.mandatoryReinvest||0)}</td>
-      <td>${money(s.profit||0)}</td>
-    `;
-    tbody.appendChild(tr);
-
     totalReceived += Number(s.netReceived || 0);
     totalProfit += Number(s.profit || 0);
     totalMandatoryReinvest += Number(s.mandatoryReinvest || 0);
