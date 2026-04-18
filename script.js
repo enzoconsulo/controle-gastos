@@ -2239,6 +2239,7 @@ function stockProduct(productId, variantId, filamentId, qty){
     variantPrice: Number(variant.price || 0),
     filamentId,
     qty: Number(qty),
+    note: note || '',
     snapshot
   });
 
@@ -2450,18 +2451,23 @@ function getGroupedStock(){
     const unitTotalCost = unitMaterial + unitHourly + unitPackaging;
     const totalCost = unitTotalCost * qty;
 
-    if(!map[s.productId]){
-      map[s.productId] = {
+    // Agrupa por Produto + Variação para não misturar
+    const groupKey = s.productId + '_' + (s.variantId || 'default');
+
+    if(!map[groupKey]){
+      map[groupKey] = {
         productId: s.productId,
+        variantId: s.variantId || 'default',
+        variantLabel: s.variantLabel || 'Padrão',
         qty: 0,
         totalCost: 0,
         lotIds: []
       };
     }
 
-    map[s.productId].qty += qty;
-    map[s.productId].totalCost += totalCost;
-    map[s.productId].lotIds.push(s.id);
+    map[groupKey].qty += qty;
+    map[groupKey].totalCost += totalCost;
+    map[groupKey].lotIds.push(s.id);
   });
 
   return Object.values(map);
@@ -2476,7 +2482,7 @@ function renderImpStock(){
 
   if(!grouped.length){
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="5" class="muted">Nenhum item em estoque.</td>`;
+    tr.innerHTML = `<td colspan="6" class="muted">Nenhum item em estoque.</td>`; // Agora com colspan 6
     tbody.appendChild(tr);
     return;
   }
@@ -2484,11 +2490,12 @@ function renderImpStock(){
   grouped.forEach(g => {
     const prod = state.products.find(p => p.id === g.productId) || { name: g.productId };
     const avgUnit = g.qty > 0 ? (g.totalCost / g.qty) : 0;
-    const firstLot = state.impStock.find(s => s.productId === g.productId);
+    const firstLot = state.impStock.find(s => s.productId === g.productId && s.variantId === g.variantId);
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${prod.name}</td>
+      <td>${g.variantLabel}</td>
       <td>${g.qty}</td>
       <td>${money(avgUnit)}</td>
       <td>${money(g.totalCost)}</td>
@@ -2501,6 +2508,7 @@ function renderImpStock(){
     tbody.appendChild(tr);
   });
 
+  // Re-anexa os eventos do botão "Vender" da tabela
   tbody.querySelectorAll('.stock-open').forEach(btn => {
     btn.addEventListener('click', e => {
       const lotId = e.target.dataset.lot || '';
@@ -2510,8 +2518,6 @@ function renderImpStock(){
       }
       const qtyInput = document.getElementById('sell-stock-qty');
       if(qtyInput) qtyInput.focus();
-
-      document.getElementById('imp3d-estoque')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 }
@@ -2917,16 +2923,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const variantId = document.getElementById('stock-variant')?.value || 'default';
     const filamentId = document.getElementById('stock-fil')?.value || '';
     const qty = Number(document.getElementById('stock-qty')?.value || 0);
-  
+    // ADICIONE ESTA LINHA:
+    const note = document.getElementById('stock-note')?.value || '';
+
     if(!productId || !variantId || !filamentId || qty <= 0){
       alert('Selecione produto, variação, filamento e quantidade válidos.');
       return;
     }
-  
-    stockProduct(productId, variantId, filamentId, qty);
-  
+
+    // PASSE A NOTA COMO ÚLTIMO PARÂMETRO
+    stockProduct(productId, variantId, filamentId, qty, note);
+
     const qtyInput = document.getElementById('stock-qty');
     if(qtyInput) qtyInput.value = '';
+    // LIMPE A NOTA APÓS ESTOCAR
+    if(document.getElementById('stock-note')) document.getElementById('stock-note').value = '';
   });
 
     const sellStockBtn = document.getElementById('sell-stock-btn');
