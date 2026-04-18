@@ -1531,7 +1531,16 @@ function openSellFormForProduct(productId, anchorBtn){
 
 function sellFromStock(stockId, qtyToSell){
   const stock = state.impStock.find(s => s.id === stockId);
-  if(!stock) return alert('Item não encontrado');
+  if(!stock){
+    alert('Item não encontrado.');
+    return;
+  }
+
+  const prod = state.products.find(p => p.id === stock.productId);
+  if(!prod){
+    alert('Produto inválido.');
+    return;
+  }
 
   qtyToSell = Number(qtyToSell || 0);
   const available = Number(stock.qty || 0);
@@ -1541,15 +1550,67 @@ function sellFromStock(stockId, qtyToSell){
     return;
   }
 
-  const prod = state.products.find(p => p.id === stock.productId);
-  if(!prod) return alert('Produto inválido');
+  // snapshot salvo no lote, se existir
+  let snapshot = stock.snapshot ? JSON.parse(JSON.stringify(stock.snapshot)) : null;
 
-  if(!stock.snapshot){
-    const liveFil = state.filaments.find(f => f.id === stock.filamentId);
-    if(!liveFil){
-      return alert('Não foi possível recuperar os dados do lote.');
+  // Se o lote não tiver custo válido, pede manualmente o preço por grama
+  const currentMaterialCost = Number(snapshot?.unitMaterialCost || 0);
+  const currentPricePerGram = snapshot?.filamentSnapshot?.pricePerGram;
+
+  let manualPricePerGram = null;
+
+  if(!snapshot || !currentMaterialCost || currentMaterialCost <= 0){
+    const defaultVal =
+      (currentPricePerGram !== undefined && currentPricePerGram !== null && currentPricePerGram !== '')
+        ? String(currentPricePerGram)
+        : '0';
+
+    const val = prompt(
+      'Esse item do estoque não tem custo de filamento válido.\nDigite o preço por grama do filamento para esta venda:',
+      defaultVal
+    );
+
+    if(val === null) return;
+
+    manualPricePerGram = Number(val || 0);
+    if(!manualPricePerGram || manualPricePerGram <= 0){
+      alert('Preço por grama inválido.');
+      return;
     }
-    stock.snapshot = buildImp3dUnitSnapshot(prod, liveFil, prod.price);
+  } else {
+    // Se quiser, ainda permite sobrescrever manualmente mesmo quando já existe custo salvo
+    const useManual = confirm('Deseja sobrescrever o custo do filamento desta venda com um preço por grama manual?');
+    if(useManual){
+      const defaultVal =
+        (currentPricePerGram !== undefined && currentPricePerGram !== null && currentPricePerGram !== '')
+          ? String(currentPricePerGram)
+          : String((Number(snapshot.unitMaterialCost || 0) / Number(prod.fil_g || 1)) || 0);
+
+      const val = prompt('Preço por grama do filamento para esta venda:', defaultVal);
+      if(val === null) return;
+
+      manualPricePerGram = Number(val || 0);
+      if(!manualPricePerGram || manualPricePerGram <= 0){
+        alert('Preço por grama inválido.');
+        return;
+      }
+    }
+  }
+
+  // Se o usuário informou manualmente, recria um snapshot temporário só para esta venda
+  if(manualPricePerGram !== null){
+    snapshot = {
+      salePricePerUnit: Number(snapshot?.salePricePerUnit || prod.price || 0),
+      unitMaterialCost: Number(prod.fil_g || 0) * manualPricePerGram,
+      unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
+      unitPackagingCost: Number(prod.pack || 0),
+      filamentSnapshot: {
+        id: stock.snapshot?.filamentSnapshot?.id || stock.filamentId || 'manual',
+        color: stock.snapshot?.filamentSnapshot?.color || 'Manual',
+        type: stock.snapshot?.filamentSnapshot?.type || 'Manual',
+        pricePerGram: manualPricePerGram
+      }
+    };
   }
 
   const result = processImp3dSale({
@@ -1557,8 +1618,8 @@ function sellFromStock(stockId, qtyToSell){
     filamentId: stock.filamentId || stock.snapshot?.filamentSnapshot?.id || 'filamento_removido',
     accountId: 'shopee',
     qty: qtyToSell,
-    pricePerUnit: Number(stock.snapshot.salePricePerUnit || prod.price || 0),
-    snapshot: stock.snapshot,
+    pricePerUnit: Number(snapshot?.salePricePerUnit || prod.price || 0),
+    snapshot,
     skipFilamentDebit: true,
     channel: 'estoque'
   });
@@ -1985,6 +2046,7 @@ function processImp3dSale({
   const prod = state.products.find(p => p.id === productId);
   const acc = state.accounts.find(a => a.id === accountId);
   const liveFil = state.filaments.find(f => f.id === filamentId);
+
   const fil = liveFil || filamentSnapshot || snapshot?.filamentSnapshot || null;
 
   if(!prod || !acc){
@@ -2005,22 +2067,38 @@ function processImp3dSale({
     return null;
   }
 
-  const snap = snapshot || buildImp3dUnitSnapshot(prod, fil, pricePerUnit);
+  const snap = snapshot || {
+    salePricePerUnit: pricePerUnit,
+    unitMaterialCost: Number(prod.fil_g || 0) * (Number(fil?.pricePerGram || 0)),
+    unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
+    unitPackagingCost: Number(prod.pack || 0),
+    filamentSnapshot: fil ? {
+      id: fil.id || '',
+      color: fil.color || 'Filamento',
+      type: fil.type || '',
+      pricePerGram: Number(fil.pricePerGram || 0)
+    } : null
+  };
+
   const totalFilNeeded = Number(prod.fil_g || 0) * qty;
 
   if(!skipFilamentDebit){
     if(!liveFil){
-      alert('Filamento removido. Essa venda normal precisa de um filamento ativo.');
+      alert('Filamento ativo não encontrado para esta venda.');
       return null;
     }
+
     if(Number(liveFil.weight || 0) < totalFilNeeded){
       if(!confirm(`Filamento selecionado tem ${Number(liveFil.weight || 0).toFixed(2)} g — precisa de ${totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return null;
     }
+
     liveFil.weight = Number(liveFil.weight || 0) - totalFilNeeded;
   }
 
-  const amountGross = Number(snap.salePricePerUnit || pricePerUnit) * qty;
-  const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * Number(snap.salePricePerUnit || pricePerUnit);
+  const unitSalePrice = Number(snap.salePricePerUnit || pricePerUnit || 0);
+  const amountGross = unitSalePrice * qty;
+
+  const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * unitSalePrice;
   const feeTotal = feePerUnit * qty;
 
   const materialCostTotal = Number(snap.unitMaterialCost || 0) * qty;
