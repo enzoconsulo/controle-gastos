@@ -1542,16 +1542,19 @@ function sellFromStock(stockId, qtyToSell){
   }
 
   const prod = state.products.find(p => p.id === stock.productId);
-  const fil = state.filaments.find(f => f.id === stock.filamentId);
-  if(!prod || !fil) return alert('Produto ou filamento inválido');
+  if(!prod) return alert('Produto inválido');
 
   if(!stock.snapshot){
-    stock.snapshot = buildImp3dUnitSnapshot(prod, fil, prod.price);
+    const liveFil = state.filaments.find(f => f.id === stock.filamentId);
+    if(!liveFil){
+      return alert('Não foi possível recuperar os dados do lote.');
+    }
+    stock.snapshot = buildImp3dUnitSnapshot(prod, liveFil, prod.price);
   }
 
   const result = processImp3dSale({
     productId: stock.productId,
-    filamentId: stock.filamentId,
+    filamentId: stock.filamentId || stock.snapshot?.filamentSnapshot?.id || 'filamento_removido',
     accountId: 'shopee',
     qty: qtyToSell,
     pricePerUnit: Number(stock.snapshot.salePricePerUnit || prod.price || 0),
@@ -1589,6 +1592,14 @@ function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit){
     unitMaterialCost: Number(prod.fil_g || 0) * pricePerGram,
     unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
     unitPackagingCost: Number(prod.pack || 0),
+    filamentSnapshot: {
+      id: fil.id,
+      color: fil.color,
+      type: fil.type,
+      price: Number(fil.price || 0),
+      initialWeight: Number(fil.initialWeight || fil.weight || 0),
+      pricePerGram
+    }
   };
 }
 
@@ -1960,13 +1971,24 @@ function handleAddProduct(){
   updateAll();
 }
 
-function processImp3dSale({ productId, filamentId, accountId, qty, pricePerUnit, snapshot, skipFilamentDebit = false, channel = 'normal' }){
+function processImp3dSale({
+  productId,
+  filamentId,
+  accountId,
+  qty,
+  pricePerUnit,
+  snapshot,
+  skipFilamentDebit = false,
+  channel = 'normal',
+  filamentSnapshot = null
+}){
   const prod = state.products.find(p => p.id === productId);
-  const fil = state.filaments.find(f => f.id === filamentId);
   const acc = state.accounts.find(a => a.id === accountId);
+  const liveFil = state.filaments.find(f => f.id === filamentId);
+  const fil = liveFil || filamentSnapshot || snapshot?.filamentSnapshot || null;
 
-  if(!prod || !fil || !acc){
-    alert('Produto/filamento/conta inválidos.');
+  if(!prod || !acc){
+    alert('Produto/conta inválidos.');
     return null;
   }
 
@@ -1978,14 +2000,23 @@ function processImp3dSale({ productId, filamentId, accountId, qty, pricePerUnit,
     return null;
   }
 
+  if(!snapshot && !fil){
+    alert('Não foi possível localizar os dados do filamento para calcular a venda.');
+    return null;
+  }
+
   const snap = snapshot || buildImp3dUnitSnapshot(prod, fil, pricePerUnit);
   const totalFilNeeded = Number(prod.fil_g || 0) * qty;
 
   if(!skipFilamentDebit){
-    if(Number(fil.weight || 0) < totalFilNeeded){
-      if(!confirm(`Filamento selecionado tem ${Number(fil.weight || 0).toFixed(2)} g — precisa de ${totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return null;
+    if(!liveFil){
+      alert('Filamento removido. Essa venda normal precisa de um filamento ativo.');
+      return null;
     }
-    fil.weight = Number(fil.weight || 0) - totalFilNeeded;
+    if(Number(liveFil.weight || 0) < totalFilNeeded){
+      if(!confirm(`Filamento selecionado tem ${Number(liveFil.weight || 0).toFixed(2)} g — precisa de ${totalFilNeeded.toFixed(2)} g. Continuar e permitir estoque negativo?`)) return null;
+    }
+    liveFil.weight = Number(liveFil.weight || 0) - totalFilNeeded;
   }
 
   const amountGross = Number(snap.salePricePerUnit || pricePerUnit) * qty;
@@ -2004,7 +2035,7 @@ function processImp3dSale({ productId, filamentId, accountId, qty, pricePerUnit,
     id: Date.now().toString(),
     date: todayISO(),
     productId,
-    filamentId,
+    filamentId: filamentId || fil?.id || '',
     accountId: 'shopee',
     qty,
     amountGross,
@@ -2051,7 +2082,7 @@ function processImp3dSale({ productId, filamentId, accountId, qty, pricePerUnit,
     const matExp = {
       id: 'imp3d-mat-' + Date.now().toString(),
       date: todayISO(),
-      desc: `Custo material ${prod.name} x${qty} (${fil.color})`,
+      desc: `Custo material ${prod.name} x${qty} (${fil?.color || 'filamento'})`,
       amount: materialCostTotal,
       type: 'saldo',
       accountId: 'imp3d',
@@ -2092,7 +2123,16 @@ function processImp3dSale({ productId, filamentId, accountId, qty, pricePerUnit,
     state.expenses.push(packExp);
   }
 
-  return { amountGross, feeTotal, netReceived, materialCostTotal, hourlyCostTotal, packagingCostTotal, mandatoryReinvest, profit, totalFilNeeded };
+  return {
+    amountGross,
+    feeTotal,
+    netReceived,
+    materialCostTotal,
+    hourlyCostTotal,
+    packagingCostTotal,
+    mandatoryReinvest,
+    profit
+  };
 }
 
 /* ---------- init ---------- */
