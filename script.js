@@ -1303,44 +1303,44 @@ function renderProducts(){
             <input class="edit-desc" data-id="${prod.id}" value="${prod.desc || ''}">
           </div>
 
-          <div class="prod-variants-panel" style="grid-column:1/-1; padding:14px; border-radius:12px; border:1px solid rgba(148,163,184,0.15); background:rgba(255,255,255,0.02);">
-            <div style="font-weight:700; margin-bottom:12px; font-size:1.05rem; color:var(--text);">Variações Cadastradas</div>
+          <div class="prod-variants-panel" style="grid-column:1/-1; padding:16px; border-radius:24px; border:1px solid rgba(148,163,184,0.15); background:rgba(255,255,255,0.02); margin-top: 8px;">
+            <div style="font-weight:700; margin-bottom:14px; font-size:1.05rem; color:var(--text);">Variações Cadastradas</div>
 
-            <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+            <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
               ${prod.variants.map(v => `
-                <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 110px auto; gap:10px; align-items:center; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
-                  <div>
-                    <label style="font-size:0.78rem;color:var(--muted)">Nome da variação</label>
+                <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:center; padding:12px; border-radius:18px; background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+                  <div class="form-field" style="margin:0; gap:4px;">
+                    <label>Nome da variação</label>
                     <input class="variant-label" data-product="${prod.id}" data-variant="${v.id}" type="text" value="${v.label}"/>
                   </div>
-                  <div>
-                    <label style="font-size:0.78rem;color:var(--muted)">Preço (R$)</label>
+                  <div class="form-field" style="margin:0; gap:4px;">
+                    <label>Preço (R$)</label>
                     <input class="variant-price" data-product="${prod.id}" data-variant="${v.id}" type="number" step="0.01" value="${v.price}"/>
                   </div>
                   <div style="display:flex; align-items:flex-end; gap:6px; height:100%; padding-bottom:2px;">
                     ${
                       v.id === 'default'
-                        ? '<span style="font-size:0.8rem;color:var(--muted-soft);padding:6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">Padrão</span>'
-                        : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}" type="button" style="border-color: var(--danger); color: var(--danger);">Remover</button>`
+                        ? '<div style="display:flex; align-items:center; justify-content:center; height: 46px; padding: 0 16px; border-radius: 16px; background: rgba(255,255,255,0.05); color:var(--muted); font-size:0.85rem;">Padrão</div>'
+                        : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}" type="button" style="height: 46px; border-radius: 16px; background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2);">Remover</button>`
                     }
                   </div>
                 </div>
               `).join('')}
             </div>
 
-            <div style="padding: 12px; border-radius: 10px; border: 1px dashed rgba(148,163,184,0.3); background: rgba(0,0,0,0.15);">
-              <div style="font-weight:600; font-size:0.9rem; color: var(--muted); margin-bottom: 10px;">➕ Adicionar Nova Variação</div>
-              <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; align-items: end; gap: 10px;">
-                <div class="form-field" style="margin:0;">
-                  <label style="font-size:0.78rem;">Nome (Ex: Rosa)</label>
+            <div style="padding: 16px; border-radius: 20px; border: 1px dashed rgba(148,163,184,0.3); background: rgba(0,0,0,0.15);">
+              <div style="font-weight:600; font-size:0.9rem; color: var(--muted); margin-bottom: 12px;">➕ Adicionar Nova Variação</div>
+              <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px;">
+                <div class="form-field" style="margin:0; gap:4px;">
+                  <label>Nome (Ex: Rosa)</label>
                   <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa">
                 </div>
-                <div class="form-field" style="margin:0;">
-                  <label style="font-size:0.78rem;">Preço (R$)</label>
+                <div class="form-field" style="margin:0; gap:4px;">
+                  <label>Preço (R$)</label>
                   <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00">
                 </div>
                 <div class="form-actions" style="margin:0;">
-                  <button class="btn small btn-primary prod-variant-add" data-id="${prod.id}" type="button" style="height: 38px;">Adicionar</button>
+                  <button class="btn-primary small prod-variant-add" data-id="${prod.id}" type="button" style="height: 46px; border-radius: 16px;">Adicionar</button>
                 </div>
               </div>
             </div>
