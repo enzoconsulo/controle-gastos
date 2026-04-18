@@ -1175,6 +1175,9 @@ function handleAddFilament(){
 /* Render produtos list (mantido) */
 function renderProducts(){
   const container = document.getElementById('prod-list');
+  const countEl = document.getElementById('imp3d-count-prod');
+  if(countEl) countEl.textContent = String(state.products.length);
+
   if(!container) return;
   container.innerHTML='';
 
@@ -1183,10 +1186,7 @@ function renderProducts(){
     p.className='muted';
     p.textContent = 'Nenhum produto cadastrado.';
     container.appendChild(p);
-
-    if(document.getElementById('imp3d-count-prod')){
-      document.getElementById('imp3d-count-prod').textContent = '0';
-    }
+    if(countEl) countEl.textContent = '0';
     return;
   }
 
@@ -1198,30 +1198,31 @@ function renderProducts(){
     card.style.gap = '10px';
 
     card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <div style="min-width:0;">
           <div style="font-weight:700">${prod.name}</div>
-          <div style="font-size:0.85rem;color:var(--muted);">
-            ${Number(prod.hours || 0).toFixed(2)}h • 
-            ${Number(prod.fil_g || 0).toFixed(2)}g • 
-            Energia: ${money(prod.energy_h || 0)}/h • 
-            Embalagem: ${money(prod.pack || 0)}
+          <div style="font-size:0.85rem;color:var(--muted); line-height:1.35; margin-top:4px;">
+            Horas: ${Number(prod.hours || 0).toFixed(2)}
+            — Filamento por unidade: ${Number(prod.fil_g || 0).toFixed(2)} g
+            — Custo/h: ${money(prod.energy_h || 0)}
+            — Embalagem: ${money(prod.pack || 0)}
           </div>
-          <div style="font-size:0.8rem;color:var(--muted); margin-top:4px;">
-            ${prod.desc || ''}
-          </div>
+          <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
         </div>
 
-        <div style="text-align:right">
+        <div style="text-align:right; flex:none;">
           <div style="font-weight:700">${money(prod.price)}</div>
-          <div style="margin-top:6px">
+          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
             <button class="btn small prod-edit-toggle" data-id="${prod.id}">Editar</button>
+            <button class="btn small prod-preview" data-id="${prod.id}">Exibir cálculo de lucro</button>
+            <button class="btn small prod-sell" data-id="${prod.id}">Vender</button>
+            <button class="btn small prod-stock" data-id="${prod.id}">Estocar</button>
             <button class="btn small prod-del" data-id="${prod.id}">Excluir</button>
           </div>
         </div>
       </div>
 
-      <!-- FORM EDIT -->
+      <!-- FORM DE EDIÇÃO -->
       <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:10px;">
         <div class="form-grid">
 
@@ -1260,7 +1261,7 @@ function renderProducts(){
             <input class="edit-desc" data-id="${prod.id}" value="${prod.desc || ''}">
           </div>
 
-          <div style="grid-column:1/-1; display:flex; gap:8px;">
+          <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn small prod-save" data-id="${prod.id}">Salvar</button>
             <button class="btn small prod-cancel" data-id="${prod.id}">Cancelar</button>
           </div>
@@ -1272,19 +1273,18 @@ function renderProducts(){
     container.appendChild(card);
   });
 
-  // 🔴 EXCLUIR
+  // excluir
   container.querySelectorAll('.prod-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
       if(!confirm('Excluir produto?')) return;
-
       state.products = state.products.filter(p=>p.id !== id);
-      saveState(); 
+      saveState();
       updateAll();
     });
   });
 
-  // 🟡 TOGGLE EDIT
+  // abrir/fechar edição
   container.querySelectorAll('.prod-edit-toggle').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1295,7 +1295,7 @@ function renderProducts(){
     });
   });
 
-  // ❌ CANCELAR
+  // cancelar edição
   container.querySelectorAll('.prod-cancel').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1304,30 +1304,207 @@ function renderProducts(){
     });
   });
 
-  // 💾 SALVAR
+  // salvar edição
   container.querySelectorAll('.prod-save').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
       const prod = state.products.find(p=>p.id === id);
       if(!prod) return;
 
-      prod.name = document.querySelector(`.edit-name[data-id="${id}"]`).value.trim();
-      prod.hours = Number(document.querySelector(`.edit-hours[data-id="${id}"]`).value || 0);
-      prod.fil_g = Number(document.querySelector(`.edit-fil[data-id="${id}"]`).value || 0);
-      prod.energy_h = Number(document.querySelector(`.edit-energy[data-id="${id}"]`).value || 0);
-      prod.pack = Number(document.querySelector(`.edit-pack[data-id="${id}"]`).value || 0);
-      prod.price = Number(document.querySelector(`.edit-price[data-id="${id}"]`).value || 0);
-      prod.desc = document.querySelector(`.edit-desc[data-id="${id}"]`).value.trim();
+      const nameEl = document.querySelector(`.edit-name[data-id="${id}"]`);
+      const hoursEl = document.querySelector(`.edit-hours[data-id="${id}"]`);
+      const filEl = document.querySelector(`.edit-fil[data-id="${id}"]`);
+      const energyEl = document.querySelector(`.edit-energy[data-id="${id}"]`);
+      const packEl = document.querySelector(`.edit-pack[data-id="${id}"]`);
+      const priceEl = document.querySelector(`.edit-price[data-id="${id}"]`);
+      const descEl = document.querySelector(`.edit-desc[data-id="${id}"]`);
+
+      const name = (nameEl?.value || '').trim();
+      const hours = Number(hoursEl?.value || 0);
+      const fil_g = Number(filEl?.value || 0);
+      const energy_h = Number(energyEl?.value || 0);
+      const pack = Number(packEl?.value || 0);
+      const price = Number(priceEl?.value || 0);
+      const desc = (descEl?.value || '').trim();
+
+      if(!name){
+        alert('Nome inválido.');
+        return;
+      }
+      if(fil_g <= 0 || price <= 0){
+        alert('Filamento por unidade e preço precisam ser maiores que zero.');
+        return;
+      }
+
+      prod.name = name;
+      prod.hours = hours;
+      prod.fil_g = fil_g;
+      prod.energy_h = energy_h;
+      prod.pack = pack;
+      prod.price = price;
+      prod.desc = desc;
 
       saveState();
       updateAll();
     });
   });
 
-  // contador
-  if(document.getElementById('imp3d-count-prod')){
-    document.getElementById('imp3d-count-prod').textContent = String(state.products.length);
+  // exibir cálculo de lucro
+  container.querySelectorAll('.prod-preview').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      openProfitCalcPreviewForProduct(id, e.target);
+    });
+  });
+
+  // vender
+  container.querySelectorAll('.prod-sell').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      openSellFormForProduct(id, e.target);
+    });
+  });
+
+  // estocar
+  container.querySelectorAll('.prod-stock').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+
+      const inSubFolder = window.location.pathname.includes('/impressora3d/');
+      const targetPath = inSubFolder ? 'estoque.html' : 'impressora3d/estoque.html';
+
+      window.location.href = `${targetPath}?prod=${encodeURIComponent(id)}`;
+    });
+  });
+
+  if(countEl) countEl.textContent = String(state.products.length);
+}
+
+function openProfitCalcPreviewForProduct(productId, anchorBtn){
+  const existing = document.getElementById('imp3d-profit-preview-' + productId);
+  if(existing){
+    existing.remove();
+    return;
   }
+
+  const prod = state.products.find(p=>p.id === productId);
+  if(!prod) return;
+
+  const form = document.createElement('div');
+  form.id = 'imp3d-profit-preview-' + productId;
+  form.style.marginTop = '10px';
+  form.style.padding = '12px';
+  form.style.borderRadius = '14px';
+  form.style.background = 'rgba(255,255,255,0.03)';
+  form.style.border = '1px solid rgba(148,163,184,0.12)';
+
+  form.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+      <strong style="font-size:0.95rem;">Cálculo estimado de lucro</strong>
+      <button type="button" class="btn small" id="${form.id}-close">Fechar</button>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Filamento</label>
+        <select id="${form.id}-fil"></select>
+      </div>
+
+      <div class="form-field">
+        <label>Quantidade</label>
+        <input id="${form.id}-qty" type="number" step="1" value="1">
+      </div>
+
+      <div class="form-field">
+        <label>Preço de venda (R$)</label>
+        <input id="${form.id}-price" type="number" step="0.01" value="${Number(prod.price || 0)}">
+      </div>
+    </div>
+
+    <div class="imp3d-sell-preview" style="margin-top:12px;">
+      <div><span class="label">Custo material</span><span class="value" id="${form.id}-mat">R$ 0,00</span></div>
+      <div><span class="label">Taxa Shopee</span><span class="value" id="${form.id}-fee">R$ 0,00</span></div>
+      <div><span class="label">Líquido</span><span class="value" id="${form.id}-net">R$ 0,00</span></div>
+      <div><span class="label">Lucro estimado</span><span class="value" id="${form.id}-profit">R$ 0,00</span></div>
+    </div>
+  `;
+
+  const card = anchorBtn.closest('.box-card');
+  card.parentNode.insertBefore(form, card.nextSibling);
+
+  const filSel = document.getElementById(`${form.id}-fil`);
+  filSel.innerHTML = '';
+
+  state.filaments.forEach(f=>{
+    const opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = `${f.color} — ${f.type} (${Number(f.weight || 0).toFixed(2)} g)`;
+    filSel.appendChild(opt);
+  });
+
+  if(!state.filaments.length){
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Nenhum filamento';
+    filSel.appendChild(opt);
+  }
+
+  const qtyInput = document.getElementById(`${form.id}-qty`);
+  const priceInput = document.getElementById(`${form.id}-price`);
+  const closeBtn = document.getElementById(`${form.id}-close`);
+
+  function recompute(){
+    const fil = state.filaments.find(f => f.id === filSel.value);
+    const qty = Number(qtyInput.value || 0);
+    const price = Number(priceInput.value || 0);
+
+    const matEl = document.getElementById(`${form.id}-mat`);
+    const feeEl = document.getElementById(`${form.id}-fee`);
+    const netEl = document.getElementById(`${form.id}-net`);
+    const profitEl = document.getElementById(`${form.id}-profit`);
+
+    if(!fil || qty <= 0 || price <= 0){
+      matEl.textContent = money(0);
+      feeEl.textContent = money(0);
+      netEl.textContent = money(0);
+      profitEl.textContent = money(0);
+      return;
+    }
+
+    const initial = Number(fil.initialWeight || fil.weight || 0);
+    const priceRolo = Number(fil.price || 0);
+    const pricePerGram = initial > 0 ? (priceRolo / initial) : 0;
+
+    const materialCostUnit = Number(prod.fil_g || 0) * pricePerGram;
+    const hourlyCostUnit = Number(prod.hours || 0) * Number(prod.energy_h || 0);
+    const packagingCostUnit = Number(prod.pack || 0);
+
+    const gross = price * qty;
+    const feePerUnit = Number(SHOPEE_FEE_FIXED) + Number(SHOPEE_FEE_PCT) * price;
+    const feeTotal = feePerUnit * qty;
+
+    const materialCostTotal = materialCostUnit * qty;
+    const hourlyCostTotal = hourlyCostUnit * qty;
+    const packagingCostTotal = packagingCostUnit * qty;
+
+    const net = gross - feeTotal;
+    const profit = net - (materialCostTotal + hourlyCostTotal + packagingCostTotal);
+
+    matEl.textContent = money(materialCostTotal);
+    feeEl.textContent = money(feeTotal);
+    netEl.textContent = money(net);
+    profitEl.textContent = money(profit);
+  }
+
+  filSel.addEventListener('change', recompute);
+  qtyInput.addEventListener('input', recompute);
+  priceInput.addEventListener('input', recompute);
+
+  closeBtn.addEventListener('click', ()=>{
+    form.remove();
+  });
+
+  setTimeout(recompute, 50);
 }
 
 function editProduct(productId){
