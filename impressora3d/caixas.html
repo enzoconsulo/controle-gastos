@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Impressora3D — Caixas</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <link rel="stylesheet" href="imp3d-pages.css"/>
+</head>
+<body class="app-shell">
+  <header class="imp3d-topbar">
+    <a class="imp3d-back" href="produtos.html">← Voltar para Produtos</a>
+    <div class="imp3d-page-title">
+      <h2>Caixas & Categorias</h2>
+      <p>Gerencie as caixas organizadoras</p>
+    </div>
+  </header>
+
+  <main class="wrap app-main imp3d-page" style="margin-top: 20px;">
+    <section class="imp3d-folder">
+      <div class="imp3d-folder-head">
+        <div>
+          <span class="imp3d-folder-kicker">Organização</span>
+          <h3 class="card-title">📦 Criar Nova Caixa</h3>
+        </div>
+      </div>
+
+      <p class="panel-subtitle">Escolha um emoji e um nome para a sua nova caixa.</p>
+
+      <div class="form-grid" style="grid-template-columns: 80px 1fr auto; align-items: end; gap: 12px;">
+        <div class="form-field" style="margin:0;">
+          <label>Emoji</label>
+          <input id="box-new-emoji" type="text" placeholder="Ex: 🏺" maxlength="2" style="text-align:center; font-size: 1.2rem;">
+        </div>
+        <div class="form-field" style="margin:0;">
+          <label>Nome da Caixa</label>
+          <input id="box-new-name" type="text" placeholder="Ex: Vasos Decorativos">
+        </div>
+        <div class="form-actions" style="margin:0;">
+          <button id="box-add-btn" class="btn-primary" type="button" style="height: 46px; border-radius: 14px;">Criar Caixa</button>
+        </div>
+      </div>
+
+      <div class="imp3d-list-head" style="margin-top: 30px; border-bottom: 1px solid rgba(148,163,184,0.1); padding-bottom: 12px;">
+        <h4>Caixas Cadastradas</h4>
+        <span class="imp3d-mini-note" id="imp3d-count-boxes">0</span>
+      </div>
+
+      <div id="box-list" class="imp3d-list" style="margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;"></div>
+    </section>
+  </main>
+
+  <script src="../script.js?v=11"></script>
+</body>
+</html>
