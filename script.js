@@ -23,6 +23,7 @@ const DEFAULT = {
   startEntries: [],
   investBoxes: [],
   filaments: [],      // {id,color,type,weight,initialWeight,price}
+  productBoxes: [{ id: 'box-default', name: 'Geral', emoji: '📦' }],
   products: [],       // {id,name,hours,fil_g,price,desc}
   impSales: [],       // {id,date,productId,filamentId,accountId,qty,amountGross,feeTotal,netReceived,materialCost,profit}
   impLosses: [],      // {id,date,filamentId,grams,cost,reason}
@@ -133,6 +134,25 @@ function loadState(){
             f.initialWeight = Number(f.weight || 0);
           }
         });
+      }
+
+      if(!s.productBoxes) {
+        s.productBoxes = [{ id: 'box-default', name: 'Geral', emoji: '📦' }];
+        
+        // Se já existiam produtos com categorias antigas (texto), converte em caixas
+        if(Array.isArray(s.products)){
+          const catNames = [...new Set(s.products.map(p => p.category).filter(c => c && c !== 'Geral'))];
+          catNames.forEach((catName, idx) => {
+            s.productBoxes.push({ id: 'box-mig-' + idx, name: catName, emoji: '📁' });
+          });
+          // Atualiza os produtos para usarem boxId em vez de category
+          s.products.forEach(p => {
+            const catName = p.category || 'Geral';
+            const box = s.productBoxes.find(b => b.name === catName);
+            p.boxId = box ? box.id : 'box-default';
+            delete p.category; // Limpa o dado velho
+          });
+        }
       }
 
       // ancora o índice no ciclo da fatura atual (24→23)
@@ -1220,9 +1240,6 @@ function closeAllProductPanels() {
 }
 
 function renderProducts(){
-  // Atualiza as opções dinâmicas do menu de caixas sempre que renderizar
-  updateCategoryDatalist();
-
   const container = document.getElementById('prod-list');
   const countEl = document.getElementById('imp3d-count-prod');
   if(!container) return;
@@ -1237,8 +1254,9 @@ function renderProducts(){
   if (searchTerm) {
     filtered = state.products.filter(p => {
       const matchName = p.name.toLowerCase().includes(searchTerm);
-      const matchCat = (p.category || 'Geral').toLowerCase().includes(searchTerm);
-      return matchName || matchCat;
+      const box = state.productBoxes.find(b => b.id === p.boxId) || { name: 'Geral' };
+      const matchBox = box.name.toLowerCase().includes(searchTerm);
+      return matchName || matchBox;
     });
   }
 
@@ -1252,16 +1270,20 @@ function renderProducts(){
     return;
   }
 
-  // 2. Agrupa pelas Caixas
+  // 2. Agrupa pelas Caixas baseando-se no state.productBoxes
   const grouped = {};
+  state.productBoxes.forEach(b => grouped[b.id] = { box: b, products: [] });
+  // Fallback caso algum produto perca a caixa
+  if(!grouped['box-default']) grouped['box-default'] = { box: {id: 'box-default', name: 'Geral', emoji: '📦'}, products: [] };
+
   filtered.forEach(prod => {
-    const cat = prod.category || 'Geral';
-    if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push(prod);
+    const bId = prod.boxId || 'box-default';
+    if(!grouped[bId]) grouped[bId] = { box: {id: bId, name: 'Desconhecida', emoji: '❓'}, products: [] };
+    grouped[bId].products.push(prod);
   });
 
-  // 3. Renderiza Caixas Retráteis
-  Object.keys(grouped).sort().forEach(cat => {
+  // 3. Renderiza Caixas Retráteis (Apenas caixas que tem produtos filtrados)
+  Object.values(grouped).filter(g => g.products.length > 0).forEach(group => {
     const catWrapper = document.createElement('div');
     catWrapper.style.marginBottom = '20px';
     catWrapper.style.background = 'rgba(255,255,255,0.02)';
@@ -1269,14 +1291,16 @@ function renderProducts(){
     catWrapper.style.borderRadius = '24px';
     catWrapper.style.padding = '16px';
     
-    // Cabeçalho Clicável (Retrátil)
+    // Cabeçalho Clicável
     catWrapper.innerHTML = `
       <div class="box-header-toggle" style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; margin-bottom: 16px;">
         <div style="display:flex; align-items:center; gap:12px;">
-          <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">📦</div>
+          <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+            ${group.box.emoji}
+          </div>
           <div>
-            <h4 style="font-weight: 700; font-size: 1.1rem; color: #fff; line-height: 1.2;">${cat}</h4>
-            <span style="font-size: 0.8rem; color: var(--muted);">${grouped[cat].length} produto(s) nesta caixa</span>
+            <h4 style="font-weight: 700; font-size: 1.1rem; color: #fff; line-height: 1.2;">${group.box.name}</h4>
+            <span style="font-size: 0.8rem; color: var(--muted);">${group.products.length} produto(s)</span>
           </div>
         </div>
         <div class="toggle-icon" style="font-size: 1.2rem; color: var(--muted);">▼</div>
@@ -1288,7 +1312,6 @@ function renderProducts(){
     const catList = catWrapper.querySelector('.cat-list');
     const toggleIcon = catWrapper.querySelector('.toggle-icon');
 
-    // Lógica para esconder/mostrar os itens da caixa ao clicar no título
     headerToggle.addEventListener('click', () => {
       if(catList.style.display === 'none'){
         catList.style.display = 'flex';
@@ -1299,9 +1322,14 @@ function renderProducts(){
       }
     });
 
-    grouped[cat].forEach(prod => {
+    group.products.forEach(prod => {
       ensureProductVariants(prod);
       const variantSummary = prod.variants.map(v => `${v.label}: ${money(v.price)}`).join(' • ');
+
+      // Gera as opções para o Select de Caixas dentro do modo Edição
+      const boxOptionsHtml = state.productBoxes.map(b => 
+        `<option value="${b.id}" ${b.id === prod.boxId ? 'selected' : ''}>${b.emoji} ${b.name}</option>`
+      ).join('');
 
       const card = document.createElement('div');
       card.className = 'box-card';
@@ -1339,8 +1367,10 @@ function renderProducts(){
           <div class="form-grid">
             
             <div class="form-field" style="grid-column:1/-1">
-              <label>Mover para Caixa / Categoria</label>
-              <input class="edit-category" list="box-options" data-id="${prod.id}" value="${prod.category || 'Geral'}" placeholder="Deixe em branco ou digite Geral para remover da caixa">
+              <label>Mover para Caixa</label>
+              <select class="edit-box" data-id="${prod.id}">
+                ${boxOptionsHtml}
+              </select>
             </div>
             
             <div class="form-field">
@@ -1474,7 +1504,7 @@ function renderProducts(){
       const prod = state.products.find(p=>p.id === id);
       if(!prod) return;
 
-      const catEl = document.querySelector(`.edit-category[data-id="${id}"]`);
+      const boxIdEl = document.querySelector(`.edit-box[data-id="${id}"]`);
       const nameEl = document.querySelector(`.edit-name[data-id="${id}"]`);
       const hoursEl = document.querySelector(`.edit-hours[data-id="${id}"]`);
       const filEl = document.querySelector(`.edit-fil[data-id="${id}"]`);
@@ -1483,8 +1513,7 @@ function renderProducts(){
       const priceEl = document.querySelector(`.edit-price[data-id="${id}"]`);
       const descEl = document.querySelector(`.edit-desc[data-id="${id}"]`);
 
-      // Se apagarem o texto ou escreverem Geral, ele vai pra Geral
-      const category = (catEl?.value || '').trim() || 'Geral';
+      const boxId = boxIdEl?.value || 'box-default';
       const name = (nameEl?.value || '').trim();
       const hours = Number(hoursEl?.value || 0);
       const fil_g = Number(filEl?.value || 0);
@@ -1502,7 +1531,7 @@ function renderProducts(){
         return;
       }
 
-      prod.category = category; // Atualiza a caixa
+      prod.boxId = boxId; // Salva a mudança de caixa
       prod.name = name;
       prod.hours = hours;
       prod.fil_g = fil_g;
@@ -2669,9 +2698,7 @@ function updateCategoryDatalist() {
 }
 
 function handleAddProduct(){
-  const catInput = document.getElementById('prod-category')?.value.trim();
-  const cat = catInput ? catInput : 'Geral'; // Se deixar em branco, vai para "Geral"
-  
+  const boxId = document.getElementById('prod-box')?.value || 'box-default';
   const name = document.getElementById('prod-name').value.trim();
   const hours = Number(document.getElementById('prod-hours').value || 0);
   const fil_g = Number(document.getElementById('prod-fil-g').value || 0);
@@ -2687,7 +2714,7 @@ function handleAddProduct(){
 
   const p = {
     id: Date.now().toString(),
-    category: cat,
+    boxId: boxId, // Salva o ID da caixa selecionada
     name,
     hours: Number(hours),
     fil_g: Number(fil_g),
@@ -2695,15 +2722,13 @@ function handleAddProduct(){
     pack: Number(pack),
     price: Number(price),
     desc,
-    variants: [
-      { id: 'default', label: 'Padrão', price: Number(price) }
-    ]
+    variants: [{ id: 'default', label: 'Padrão', price: Number(price) }]
   };
 
   state.products.push(p);
   saveState();
 
-  // Limpa apenas os dados, mantém a Caixa preenchida para agilizar cadastros em massa
+  // Limpa campos, mas mantém a caixa pré-selecionada para facilitar o fluxo
   document.getElementById('prod-name').value = '';
   document.getElementById('prod-hours').value = '';
   document.getElementById('prod-fil-g').value = '';
@@ -3200,6 +3225,126 @@ function fillVariantSelect(selectEl, prod, selectedId){
   }
 }
 
+/* ========================================================
+   SISTEMA DE CAIXAS (CRUD)
+   ======================================================== */
+
+// Alimenta o Select na página de Produtos
+function populateProductBoxSelects() {
+  const selectMain = document.getElementById('prod-box');
+  if(selectMain) {
+    const current = selectMain.value;
+    selectMain.innerHTML = '';
+    state.productBoxes.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b.id;
+      opt.textContent = `${b.emoji} ${b.name}`;
+      selectMain.appendChild(opt);
+    });
+    if(current && state.productBoxes.some(b => b.id === current)) selectMain.value = current;
+  }
+}
+
+// Renderiza a lista na página de Caixas
+function renderProductBoxes() {
+  const container = document.getElementById('box-list');
+  const countEl = document.getElementById('imp3d-count-boxes');
+  if(!container) return;
+
+  container.innerHTML = '';
+  if(countEl) countEl.textContent = state.productBoxes.length;
+
+  state.productBoxes.forEach(box => {
+    // Conta quantos produtos estão nesta caixa
+    const count = state.products.filter(p => p.boxId === box.id).length;
+
+    const card = document.createElement('div');
+    card.className = 'box-card';
+    card.style.background = 'rgba(255,255,255,0.02)';
+    card.style.border = '1px solid rgba(148,163,184,0.12)';
+    
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+            ${box.emoji}
+          </div>
+          <div>
+            <div style="font-weight:700; font-size: 1.05rem;">${box.name}</div>
+            <div style="font-size:0.8rem;color:var(--muted);">${count} produto(s) vinculado(s)</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn small box-edit" data-id="${box.id}">Editar</button>
+          ${box.id !== 'box-default' ? `<button class="btn small box-del" data-id="${box.id}" style="color:var(--danger); border-color:rgba(239,68,68,0.2);">Excluir</button>` : ''}
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  // Excluir Caixa
+  container.querySelectorAll('.box-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const id = e.target.dataset.id;
+      const count = state.products.filter(p => p.boxId === id).length;
+      if(count > 0) {
+        if(!confirm(`Esta caixa possui ${count} produto(s). Se excluir, eles serão movidos para a caixa "Geral". Confirmar?`)) return;
+        state.products.forEach(p => { if(p.boxId === id) p.boxId = 'box-default'; });
+      } else {
+        if(!confirm('Excluir esta caixa?')) return;
+      }
+      state.productBoxes = state.productBoxes.filter(b => b.id !== id);
+      saveState();
+      updateAll();
+    });
+  });
+
+  // Editar Caixa
+  container.querySelectorAll('.box-edit').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const id = e.target.dataset.id;
+      const box = state.productBoxes.find(b => b.id === id);
+      if(!box) return;
+      
+      const newEmoji = prompt('Novo Emoji (deixe em branco para manter):', box.emoji);
+      if(newEmoji === null) return;
+      const newName = prompt('Novo Nome (deixe em branco para manter):', box.name);
+      if(newName === null) return;
+
+      if(newEmoji.trim()) box.emoji = newEmoji.trim();
+      if(newName.trim()) box.name = newName.trim();
+      
+      saveState();
+      updateAll();
+    });
+  });
+}
+
+// Botão "Criar Caixa" na página de Caixas
+document.addEventListener('DOMContentLoaded', () => {
+  const addBoxBtn = document.getElementById('box-add-btn');
+  if(addBoxBtn) {
+    addBoxBtn.addEventListener('click', () => {
+      const emoji = document.getElementById('box-new-emoji').value.trim() || '📦';
+      const name = document.getElementById('box-new-name').value.trim();
+
+      if(!name) return alert('Digite o nome da caixa.');
+
+      state.productBoxes.push({
+        id: 'box-' + Date.now(),
+        name: name,
+        emoji: emoji
+      });
+
+      saveState();
+      document.getElementById('box-new-emoji').value = '';
+      document.getElementById('box-new-name').value = '';
+      updateAll();
+    });
+  }
+});
+
 function updateAll(){
   populateAccountSelects();
   renderEditableAccounts();
@@ -3221,6 +3366,9 @@ function updateAll(){
   renderImpStock();
   populateImp3dStockSelects();
   updateImp3dAccountBalances();
+
+  populateProductBoxSelects();
+  renderProductBoxes();
 }
 
 /* ---------- FIM DO ARQUIVO ---------- */
