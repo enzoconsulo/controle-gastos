@@ -823,9 +823,15 @@ function applySalary(){
   state.totals.entrada = entrada;
   const itau = state.accounts.find(a => a.name.toLowerCase().includes('itau'));
   if(itau && entrada > 0){
+    // FIX: Subtrai o valor anterior antes de somar o novo para evitar saldo duplicado
+    const existingEntry = (state.startEntries || []).find(se => se.month === currentMonth && se.accountId === itau.id);
+    if(existingEntry) {
+        itau.saldo = Number(itau.saldo || 0) - existingEntry.amount;
+    }
+
     state.startEntries = (state.startEntries || []).filter(se => !(se.month === currentMonth && se.accountId === itau.id));
     state.startEntries.push({ month: currentMonth, accountId: itau.id, amount: entrada });
-    itau.saldo = Number(itau.saldo || 0) + entrada; // SOMA, não sobrescreve
+    itau.saldo = Number(itau.saldo || 0) + entrada; // SOMA de forma segura agora
   }
 
   // Exigir/usar VR informado para atualizar CAJU (se houver)
@@ -2132,6 +2138,9 @@ function sellFromStock(stockId, qtyToSell){
       unitMaterialCost: Number(prod.fil_g || 0) * manualPricePerGram,
       unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
       unitPackagingCost: Number(prod.pack || 0),
+      // FIX: Preservando as variáveis para não quebrar a estrutura do histórico
+      variantId: snapshot?.variantId || 'default',
+      variantLabel: snapshot?.variantLabel || 'Padrão',
       filamentSnapshot: {
         id: stock.snapshot?.filamentSnapshot?.id || stock.filamentId || 'manual',
         color: stock.snapshot?.filamentSnapshot?.color || 'Manual',
@@ -2989,51 +2998,6 @@ function ensureProductVariants(prod){
   }
 
   return prod.variants;
-}
-
-function getProductVariant(prod, variantId){
-  const variants = ensureProductVariants(prod);
-  return variants.find(v => v.id === variantId) || variants[0] || null;
-}
-
-function getProductVariantPrice(prod, variantId){
-  const v = getProductVariant(prod, variantId);
-  return Number(v?.price ?? prod?.price ?? 0);
-}
-
-function matchVariantToFilament(prod, filamentId){
-  const fil = state.filaments.find(f => f.id === filamentId);
-  const variants = ensureProductVariants(prod);
-  if(!fil || !variants.length) return variants[0]?.id || 'default';
-
-  const needle = String(fil.color || fil.type || '').toLowerCase().trim();
-  if(!needle) return variants[0]?.id || 'default';
-
-  const found = variants.find(v =>
-    String(v.label || '').toLowerCase().includes(needle) ||
-    String(v.id || '').toLowerCase().includes(needle)
-  );
-
-  return found ? found.id : (variants[0]?.id || 'default');
-}
-
-function fillVariantSelect(selectEl, prod, selectedId){
-  if(!selectEl || !prod) return;
-  const variants = ensureProductVariants(prod);
-  selectEl.innerHTML = '';
-
-  variants.forEach(v=>{
-    const opt = document.createElement('option');
-    opt.value = v.id;
-    opt.textContent = `${v.label} — ${money(v.price)}`;
-    selectEl.appendChild(opt);
-  });
-
-  if(selectedId && variants.some(v => v.id === selectedId)){
-    selectEl.value = selectedId;
-  } else {
-    selectEl.value = variants[0]?.id || 'default';
-  }
 }
 
 function getProductVariant(prod, variantId){
