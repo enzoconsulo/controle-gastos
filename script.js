@@ -78,28 +78,7 @@ function loadState(){
         s.products.forEach(p => {
           if(p && p.energy_h === undefined) p.energy_h = 0;
           if(p && p.pack === undefined) p.pack = 0;
-      
-          if(!Array.isArray(p.variants) || !p.variants.length){
-            p.variants = [{
-              id: 'default',
-              label: 'Padrão',
-              price: Number(p.price || 0)
-            }];
-          } else {
-            p.variants = p.variants.map((v, idx)=>({
-              id: v.id || (idx === 0 ? 'default' : `var-${idx}`),
-              label: String(v.label || v.name || `Variação ${idx + 1}`).trim(),
-              price: Number(v.price ?? p.price ?? 0)
-            }));
-      
-            if(!p.variants.some(v => v.id === 'default')){
-              p.variants.unshift({
-                id: 'default',
-                label: 'Padrão',
-                price: Number(p.price || 0)
-              });
-            }
-          }
+          ensureProductVariants(p);
         });
       }
       if(!s.impSales) s.impSales = [];
@@ -1214,6 +1193,7 @@ function renderProducts(){
 
   state.products.forEach(prod=>{
     ensureProductVariants(prod);
+
     const variantSummary = prod.variants
       .map(v => `${v.label}: ${money(v.price)}`)
       .join(' • ');
@@ -1234,7 +1214,7 @@ function renderProducts(){
             — Custo/h: ${money(prod.energy_h || 0)}
             — Embalagem: ${money(prod.pack || 0)}
           </div>
-          <div style="font-size:0.82rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
+          <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
           <div style="font-size:0.78rem;color:var(--muted-soft); margin-top:6px">${variantSummary}</div>
         </div>
 
@@ -1292,15 +1272,21 @@ function renderProducts(){
 
             <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;">
               ${prod.variants.map(v => `
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px; border-radius:10px; background:rgba(0,0,0,0.08);">
-                  <div style="min-width:0;">
-                    <div style="font-weight:600">${v.label}</div>
-                    <div style="font-size:0.82rem; color:var(--muted);">${money(v.price)}</div>
+                <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 110px auto; gap:8px; align-items:center; padding:8px; border-radius:10px; background:rgba(0,0,0,0.08);">
+                  <div>
+                    <label style="font-size:0.78rem;color:var(--muted)">Nome da variação</label>
+                    <input class="variant-label" data-product="${prod.id}" data-variant="${v.id}" type="text" value="${v.label}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
                   </div>
-                  <div style="display:flex; gap:6px; flex:none;">
-                    ${v.id === 'default'
-                      ? '<span style="font-size:0.78rem;color:var(--muted-soft);align-self:center;">Padrão</span>'
-                      : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}">Remover</button>`}
+                  <div>
+                    <label style="font-size:0.78rem;color:var(--muted)">Preço</label>
+                    <input class="variant-price" data-product="${prod.id}" data-variant="${v.id}" type="number" step="0.01" value="${v.price}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
+                  </div>
+                  <div style="display:flex; align-items:flex-end; gap:6px;">
+                    ${
+                      v.id === 'default'
+                        ? '<span style="font-size:0.78rem;color:var(--muted-soft);padding:8px 0;">Padrão</span>'
+                        : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}" type="button">Remover</button>`
+                    }
                   </div>
                 </div>
               `).join('')}
@@ -1312,7 +1298,7 @@ function renderProducts(){
                 <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa">
               </div>
               <div class="form-field">
-                <label>Preço da variação</label>
+                <label>Preço da nova variação</label>
                 <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00">
               </div>
               <div class="form-actions" style="grid-column:1/-1;">
@@ -1402,6 +1388,42 @@ function renderProducts(){
       ensureProductVariants(prod);
       const base = prod.variants.find(v => v.id === 'default');
       if(base) base.price = price;
+      if(base && (!base.label || base.label.trim() === '')){
+        base.label = 'Padrão';
+      }
+
+      // atualiza variantes editáveis
+      const variantRows = card.querySelectorAll('.variant-row');
+      const variants = [];
+      variantRows.forEach(row=>{
+        const vid = row.dataset.variantId;
+        const labelEl = row.querySelector('.variant-label');
+        const priceElRow = row.querySelector('.variant-price');
+
+        const label = (labelEl?.value || '').trim();
+        const vPrice = Number(priceElRow?.value || 0);
+
+        if(!label || vPrice <= 0) return;
+
+        variants.push({
+          id: vid || `var-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          label,
+          price: vPrice
+        });
+      });
+
+      if(!variants.some(v => v.id === 'default')){
+        variants.unshift({
+          id: 'default',
+          label: base?.label || 'Padrão',
+          price: Number(base?.price ?? price)
+        });
+      } else {
+        const def = variants.find(v => v.id === 'default');
+        if(def && !def.label) def.label = base?.label || 'Padrão';
+      }
+
+      prod.variants = variants;
 
       saveState();
       updateAll();
@@ -1413,7 +1435,6 @@ function renderProducts(){
       const id = e.target.dataset.id;
       const prod = state.products.find(p=>p.id === id);
       if(!prod) return;
-
       ensureProductVariants(prod);
 
       const labelEl = document.querySelector(`.variant-new-label[data-id="${id}"]`);
@@ -1436,8 +1457,6 @@ function renderProducts(){
         price
       });
 
-      labelEl.value = '';
-      priceEl.value = '';
       saveState();
       updateAll();
     });
@@ -1895,7 +1914,6 @@ function openWithdrawFormForFilament(filamentId, anchorBtn) {
   });
 }
 
-/* abre formulário de venda inline (mantido) */
 function openSellFormForProduct(productId, anchorBtn){
   const existing = document.getElementById('imp3d-sell-form-'+productId);
   if(existing){ existing.remove(); return; }
@@ -1912,7 +1930,6 @@ function openSellFormForProduct(productId, anchorBtn){
   form.style.background = 'rgba(0,0,0,0.06)';
   form.style.borderRadius = '8px';
   form.style.border = '1px solid rgba(255,255,255,0.03)';
-
   form.innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <div style="flex:1; min-width:160px">
@@ -1941,14 +1958,17 @@ function openSellFormForProduct(productId, anchorBtn){
       </div>
     </div>
   `;
-
   const card = anchorBtn.closest('.box-card');
   card.parentNode.insertBefore(form, card.nextSibling);
 
   const variantSel = document.getElementById(`sell-variant-${productId}`);
+  const filSel = document.getElementById(`sell-fil-${productId}`);
+  const accSel = document.getElementById(`sell-acc-${productId}`);
+  const qtyInput = document.getElementById(`sell-qty-${productId}`);
+  const priceInput = document.getElementById(`sell-price-${productId}`);
+
   fillVariantSelect(variantSel, prod, 'default');
 
-  const filSel = document.getElementById(`sell-fil-${productId}`);
   filSel.innerHTML = '';
   state.filaments.forEach(f=>{
     const opt = document.createElement('option');
@@ -1963,38 +1983,27 @@ function openSellFormForProduct(productId, anchorBtn){
     filSel.appendChild(opt);
   }
 
-  const accSel = document.getElementById(`sell-acc-${productId}`);
   accSel.innerHTML = '';
   state.accounts.forEach(a=>{
     const o = document.createElement('option');
-    o.value = a.id; o.textContent = a.name; accSel.appendChild(o);
+    o.value = a.id;
+    o.textContent = a.name;
+    accSel.appendChild(o);
   });
   if(state.accounts.some(a=>a.id==='shopee')) accSel.value = 'shopee';
 
-  const qtyInput = document.getElementById(`sell-qty-${productId}`);
-  const priceInput = document.getElementById(`sell-price-${productId}`);
-
-  function syncPriceAndVariant(){
-    const selectedVariantId = variantSel.value || 'default';
-    const selectedFilId = filSel.value;
-
-    const autoVariantId = selectedFilId ? matchVariantToFilament(prod, selectedFilId) : selectedVariantId;
-    if(autoVariantId && autoVariantId !== variantSel.value){
-      variantSel.value = autoVariantId;
-    }
-
-    const v = getProductVariant(prod, variantSel.value);
-    if(v){
-      priceInput.value = Number(v.price || 0).toFixed(2);
-    }
-  }
-
-  variantSel.addEventListener('change', ()=>{
+  function syncPriceFromVariant(){
     const v = getProductVariant(prod, variantSel.value);
     if(v) priceInput.value = Number(v.price || 0).toFixed(2);
-  });
+  }
 
-  filSel.addEventListener('change', syncPriceAndVariant);
+  variantSel.addEventListener('change', syncPriceFromVariant);
+
+  filSel.addEventListener('change', ()=>{
+    const autoVariantId = matchVariantToFilament(prod, filSel.value);
+    if(autoVariantId) variantSel.value = autoVariantId;
+    syncPriceFromVariant();
+  });
 
   document.getElementById(`sell-cancel-${productId}`).addEventListener('click', ()=>{
     form.remove();
@@ -2005,7 +2014,6 @@ function openSellFormForProduct(productId, anchorBtn){
     const qty = Number(qtyInput.value || 0);
     const accId = accSel.value;
     const price = Number(priceInput.value || 0);
-    const variantId = variantSel.value || 'default';
 
     if(!filId || qty <= 0 || !accId || price <= 0){
       alert('Preencha filamento, quantidade, conta e preço corretos.');
@@ -2016,7 +2024,7 @@ function openSellFormForProduct(productId, anchorBtn){
     form.remove();
   });
 
-  syncPriceAndVariant();
+  syncPriceFromVariant();
 }
 
 function sellFromStock(stockId, qtyToSell){
@@ -2918,23 +2926,68 @@ function ensureProductVariants(prod){
       label: 'Padrão',
       price: Number(prod.price || 0)
     }];
-  } else {
-    prod.variants = prod.variants.map((v, idx)=>({
-      id: v.id || (idx === 0 ? 'default' : `var-${idx}`),
-      label: String(v.label || v.name || `Variação ${idx + 1}`).trim(),
-      price: Number(v.price ?? prod.price ?? 0)
-    }));
+  }
 
-    if(!prod.variants.some(v => v.id === 'default')){
-      prod.variants.unshift({
-        id: 'default',
-        label: 'Padrão',
-        price: Number(prod.price || 0)
-      });
-    }
+  prod.variants = prod.variants.map((v, idx)=>({
+    id: v.id || (idx === 0 ? 'default' : `var-${idx}`),
+    label: String(v.label || v.name || `Variação ${idx + 1}`).trim() || `Variação ${idx + 1}`,
+    price: Number(v.price ?? prod.price ?? 0)
+  }));
+
+  if(!prod.variants.some(v => v.id === 'default')){
+    prod.variants.unshift({
+      id: 'default',
+      label: 'Padrão',
+      price: Number(prod.price || 0)
+    });
   }
 
   return prod.variants;
+}
+
+function getProductVariant(prod, variantId){
+  const variants = ensureProductVariants(prod);
+  return variants.find(v => v.id === variantId) || variants[0] || null;
+}
+
+function getProductVariantPrice(prod, variantId){
+  const v = getProductVariant(prod, variantId);
+  return Number(v?.price ?? prod?.price ?? 0);
+}
+
+function matchVariantToFilament(prod, filamentId){
+  const fil = state.filaments.find(f => f.id === filamentId);
+  const variants = ensureProductVariants(prod);
+  if(!fil || !variants.length) return variants[0]?.id || 'default';
+
+  const needle = String(fil.color || fil.type || '').toLowerCase().trim();
+  if(!needle) return variants[0]?.id || 'default';
+
+  const found = variants.find(v =>
+    String(v.label || '').toLowerCase().includes(needle) ||
+    String(v.id || '').toLowerCase().includes(needle)
+  );
+
+  return found ? found.id : (variants[0]?.id || 'default');
+}
+
+function fillVariantSelect(selectEl, prod, selectedId){
+  if(!selectEl || !prod) return;
+  const variants = ensureProductVariants(prod);
+  selectEl.innerHTML = '';
+
+  variants.forEach(v=>{
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = `${v.label} — ${money(v.price)}`;
+    selectEl.appendChild(opt);
+  });
+
+  if(selectedId && variants.some(v => v.id === selectedId)){
+    selectEl.value = selectedId;
+  } else {
+    selectEl.value = variants[0]?.id || 'default';
+  }
 }
 
 function getProductVariant(prod, variantId){
