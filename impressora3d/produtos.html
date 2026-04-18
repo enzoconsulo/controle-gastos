@@ -37,12 +37,13 @@
         <span class="imp3d-folder-badge">Tabela base</span>
       </div>
 
-      <p class="panel-subtitle">Organize seus produtos em caixas e cadastre os custos de fabricação.</p>
+      <p class="panel-subtitle">Organize seus produtos em caixas dinâmicas e cadastre os custos de fabricação.</p>
 
       <div class="form-grid imp3d-form-grid">
         <div class="form-field" style="grid-column:1/-1">
           <label>Caixa / Categoria</label>
-          <input id="prod-category" type="text" placeholder="Ex: Chaveiros, Decoração, Vasos..."/>
+          <input id="prod-category" type="text" list="box-options" placeholder="Selecione uma existente ou crie uma nova..."/>
+          <datalist id="box-options"></datalist>
         </div>
         <div class="form-field">
           <label>Nome do produto</label>
@@ -90,8 +91,8 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="../script.js?v=9"></script>
-  <script src="../sync-pluggy-ui.js?v=9"></script>
+  <script src="../script.js?v=10"></script>
+  <script src="../sync-pluggy-ui.js?v=10"></script>
   
   <script>
     document.addEventListener('DOMContentLoaded', () => {
