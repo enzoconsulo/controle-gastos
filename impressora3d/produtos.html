@@ -42,8 +42,10 @@
       <div class="form-grid imp3d-form-grid">
         <div class="form-field" style="grid-column:1/-1">
           <label>Caixa / Categoria</label>
-          <input id="prod-category" type="text" list="box-options" placeholder="Selecione uma existente ou crie uma nova..."/>
-          <datalist id="box-options"></datalist>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <select id="prod-box" style="flex:1;"></select>
+            <a href="caixas.html" class="btn ghost small" style="height: 46px; display:flex; align-items:center; border-radius:14px;">⚙️ Gerenciar Caixas</a>
+          </div>
         </div>
         <div class="form-field">
           <label>Nome do produto</label>
