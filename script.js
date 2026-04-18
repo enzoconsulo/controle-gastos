@@ -1219,153 +1219,203 @@ function closeAllProductPanels() {
   document.querySelectorAll('[id^="imp3d-sell-form-"]').forEach(box => box.remove());
 }
 
-/* Render produtos list */
 function renderProducts(){
   const container = document.getElementById('prod-list');
   const countEl = document.getElementById('imp3d-count-prod');
-  if(countEl) countEl.textContent = String(state.products.length);
-
   if(!container) return;
+  
   container.innerHTML='';
 
-  if(!state.products.length){
+  // 1. Lógica de Pesquisa
+  const searchInput = document.getElementById('prod-search');
+  const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+  let filtered = state.products;
+  if (searchTerm) {
+    filtered = state.products.filter(p => {
+      const matchName = p.name.toLowerCase().includes(searchTerm);
+      const matchCat = (p.category || 'Geral').toLowerCase().includes(searchTerm);
+      return matchName || matchCat;
+    });
+  }
+
+  if(countEl) countEl.textContent = String(filtered.length);
+
+  if(!filtered.length){
     const p = document.createElement('p');
     p.className='muted';
-    p.textContent = 'Nenhum produto cadastrado.';
+    p.textContent = searchTerm ? 'Nenhum produto encontrado na pesquisa.' : 'Nenhum produto cadastrado.';
     container.appendChild(p);
-    if(countEl) countEl.textContent = '0';
     return;
   }
 
-  state.products.forEach(prod=>{
-    ensureProductVariants(prod);
+  // 2. Agrupar produtos pelas Caixas (Categorias)
+  const grouped = {};
+  filtered.forEach(prod => {
+    const cat = prod.category || 'Geral';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(prod);
+  });
 
-    const variantSummary = prod.variants
-      .map(v => `${v.label}: ${money(v.price)}`)
-      .join(' • ');
-
-    const card = document.createElement('div');
-    card.className = 'box-card';
-    card.style.display = 'flex';
-    card.style.flexDirection = 'column';
-    card.style.gap = '10px';
-
-    card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <div style="min-width:0;">
-          <div style="font-weight:700">${prod.name}</div>
-          <div style="font-size:0.85rem;color:var(--muted); line-height:1.35; margin-top:4px;">
-            Horas: ${Number(prod.hours || 0).toFixed(2)}
-            — Filamento por unidade: ${Number(prod.fil_g || 0).toFixed(2)} g
-            — Custo/h: ${money(prod.energy_h || 0)}
-            — Embalagem: ${money(prod.pack || 0)}
-          </div>
-          <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
-          <div style="font-size:0.78rem;color:var(--muted-soft); margin-top:6px">${variantSummary}</div>
-        </div>
-
-        <div style="text-align:right; flex:none;">
-          <div style="font-weight:700">${money(prod.price)}</div>
-          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-            <button class="btn small prod-edit-toggle" data-id="${prod.id}">Editar</button>
-            <button class="btn small prod-preview" data-id="${prod.id}">Exibir cálculo de lucro</button>
-            <button class="btn small prod-sell" data-id="${prod.id}">Vender</button>
-            <button class="btn small prod-stock" data-id="${prod.id}">Estocar</button>
-            <button class="btn small prod-del" data-id="${prod.id}">Excluir</button>
-          </div>
+  // 3. Renderizar o visual agrupado por Caixas
+  Object.keys(grouped).sort().forEach(cat => {
+    const catWrapper = document.createElement('div');
+    catWrapper.style.marginBottom = '20px';
+    catWrapper.style.background = 'rgba(255,255,255,0.02)';
+    catWrapper.style.border = '1px solid rgba(148,163,184,0.12)';
+    catWrapper.style.borderRadius = '24px';
+    catWrapper.style.padding = '16px';
+    
+    // Cabeçalho da Caixa
+    catWrapper.innerHTML = `
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom: 16px;">
+        <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">📦</div>
+        <div>
+          <h4 style="font-weight: 700; font-size: 1.1rem; color: #fff; line-height: 1.2;">${cat}</h4>
+          <span style="font-size: 0.8rem; color: var(--muted);">${grouped[cat].length} produto(s) nesta caixa</span>
         </div>
       </div>
+      <div class="cat-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+    `;
 
-      <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:10px;">
-        <div class="form-grid">
-          <div class="form-field">
-            <label>Nome</label>
-            <input class="edit-name" data-id="${prod.id}" value="${prod.name}">
+    const catList = catWrapper.querySelector('.cat-list');
+
+    // Produtos dentro desta Caixa
+    grouped[cat].forEach(prod => {
+      ensureProductVariants(prod);
+      const variantSummary = prod.variants.map(v => `${v.label}: ${money(v.price)}`).join(' • ');
+
+      const card = document.createElement('div');
+      card.className = 'box-card';
+      card.style.display = 'flex';
+      card.style.flexDirection = 'column';
+      card.style.gap = '10px';
+
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <div style="min-width:0;">
+            <div style="font-weight:700">${prod.name}</div>
+            <div style="font-size:0.85rem;color:var(--muted); line-height:1.35; margin-top:4px;">
+              Horas: ${Number(prod.hours || 0).toFixed(2)}
+              — Filamento por unidade: ${Number(prod.fil_g || 0).toFixed(2)} g
+              — Custo/h: ${money(prod.energy_h || 0)}
+              — Embalagem: ${money(prod.pack || 0)}
+            </div>
+            <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
+            <div style="font-size:0.78rem;color:var(--muted-soft); margin-top:6px">${variantSummary}</div>
           </div>
 
-          <div class="form-field">
-            <label>Horas</label>
-            <input type="number" step="0.1" class="edit-hours" data-id="${prod.id}" value="${prod.hours}">
+          <div style="text-align:right; flex:none;">
+            <div style="font-weight:700">${money(prod.price)}</div>
+            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+              <button class="btn small prod-edit-toggle" data-id="${prod.id}">Editar</button>
+              <button class="btn small prod-preview" data-id="${prod.id}">Exibir lucro</button>
+              <button class="btn small prod-sell" data-id="${prod.id}">Vender</button>
+              <button class="btn small prod-stock" data-id="${prod.id}">Estocar</button>
+              <button class="btn small prod-del" data-id="${prod.id}">Excluir</button>
+            </div>
           </div>
+        </div>
 
-          <div class="form-field">
-            <label>Filamento (g)</label>
-            <input type="number" step="0.01" class="edit-fil" data-id="${prod.id}" value="${prod.fil_g}">
-          </div>
+        <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:10px;">
+          <div class="form-grid">
+            <div class="form-field">
+              <label>Caixa / Categoria</label>
+              <input class="edit-category" data-id="${prod.id}" value="${prod.category || 'Geral'}">
+            </div>
+            
+            <div class="form-field">
+              <label>Nome do Produto</label>
+              <input class="edit-name" data-id="${prod.id}" value="${prod.name}">
+            </div>
 
-          <div class="form-field">
-            <label>Energia (R$/h)</label>
-            <input type="number" step="0.01" class="edit-energy" data-id="${prod.id}" value="${prod.energy_h}">
-          </div>
+            <div class="form-field">
+              <label>Horas</label>
+              <input type="number" step="0.1" class="edit-hours" data-id="${prod.id}" value="${prod.hours}">
+            </div>
 
-          <div class="form-field">
-            <label>Embalagem</label>
-            <input type="number" step="0.01" class="edit-pack" data-id="${prod.id}" value="${prod.pack}">
-          </div>
+            <div class="form-field">
+              <label>Filamento (g)</label>
+              <input type="number" step="0.01" class="edit-fil" data-id="${prod.id}" value="${prod.fil_g}">
+            </div>
 
-          <div class="form-field">
-            <label>Preço base</label>
-            <input type="number" step="0.01" class="edit-price" data-id="${prod.id}" value="${prod.price}">
-          </div>
+            <div class="form-field">
+              <label>Energia (R$/h)</label>
+              <input type="number" step="0.01" class="edit-energy" data-id="${prod.id}" value="${prod.energy_h}">
+            </div>
 
-          <div class="form-field" style="grid-column:1/-1">
-            <label>Descrição</label>
-            <input class="edit-desc" data-id="${prod.id}" value="${prod.desc || ''}">
-          </div>
+            <div class="form-field">
+              <label>Embalagem</label>
+              <input type="number" step="0.01" class="edit-pack" data-id="${prod.id}" value="${prod.pack}">
+            </div>
 
-          <div class="prod-variants-panel" style="grid-column:1/-1; padding:16px; border-radius:24px; border:1px solid rgba(148,163,184,0.15); background:rgba(255,255,255,0.02); margin-top: 8px;">
-            <div style="font-weight:700; margin-bottom:14px; font-size:1.05rem; color:var(--text);">Variações Cadastradas</div>
+            <div class="form-field">
+              <label>Preço base</label>
+              <input type="number" step="0.01" class="edit-price" data-id="${prod.id}" value="${prod.price}">
+            </div>
 
-            <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
-              ${prod.variants.map(v => `
-                <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:center; padding:12px; border-radius:18px; background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+            <div class="form-field" style="grid-column:1/-1">
+              <label>Descrição</label>
+              <input class="edit-desc" data-id="${prod.id}" value="${prod.desc || ''}">
+            </div>
+
+            <div class="prod-variants-panel" style="grid-column:1/-1; padding:16px; border-radius:24px; border:1px solid rgba(148,163,184,0.15); background:rgba(255,255,255,0.02); margin-top: 8px;">
+              <div style="font-weight:700; margin-bottom:14px; font-size:1.05rem; color:var(--text);">Variações Cadastradas</div>
+
+              <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
+                ${prod.variants.map(v => `
+                  <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:center; padding:12px; border-radius:18px; background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+                    <div class="form-field" style="margin:0; gap:4px;">
+                      <label>Nome da variação</label>
+                      <input class="variant-label" data-product="${prod.id}" data-variant="${v.id}" type="text" value="${v.label}"/>
+                    </div>
+                    <div class="form-field" style="margin:0; gap:4px;">
+                      <label>Preço (R$)</label>
+                      <input class="variant-price" data-product="${prod.id}" data-variant="${v.id}" type="number" step="0.01" value="${v.price}"/>
+                    </div>
+                    <div style="display:flex; align-items:flex-end; gap:6px; height:100%; padding-bottom:2px;">
+                      ${
+                        v.id === 'default'
+                          ? '<div style="display:flex; align-items:center; justify-content:center; height: 46px; padding: 0 16px; border-radius: 16px; background: rgba(255,255,255,0.05); color:var(--muted); font-size:0.85rem;">Padrão</div>'
+                          : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}" type="button" style="height: 46px; border-radius: 16px; background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2);">Remover</button>`
+                      }
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div style="padding: 16px; border-radius: 20px; border: 1px dashed rgba(148,163,184,0.3); background: rgba(0,0,0,0.15);">
+                <div style="font-weight:600; font-size:0.9rem; color: var(--muted); margin-bottom: 12px;">➕ Adicionar Nova Variação</div>
+                <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px;">
                   <div class="form-field" style="margin:0; gap:4px;">
-                    <label>Nome da variação</label>
-                    <input class="variant-label" data-product="${prod.id}" data-variant="${v.id}" type="text" value="${v.label}"/>
+                    <label>Nome (Ex: Rosa)</label>
+                    <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa">
                   </div>
                   <div class="form-field" style="margin:0; gap:4px;">
                     <label>Preço (R$)</label>
-                    <input class="variant-price" data-product="${prod.id}" data-variant="${v.id}" type="number" step="0.01" value="${v.price}"/>
+                    <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00">
                   </div>
-                  <div style="display:flex; align-items:flex-end; gap:6px; height:100%; padding-bottom:2px;">
-                    ${
-                      v.id === 'default'
-                        ? '<div style="display:flex; align-items:center; justify-content:center; height: 46px; padding: 0 16px; border-radius: 16px; background: rgba(255,255,255,0.05); color:var(--muted); font-size:0.85rem;">Padrão</div>'
-                        : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}" type="button" style="height: 46px; border-radius: 16px; background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2);">Remover</button>`
-                    }
+                  <div class="form-actions" style="margin:0;">
+                    <button class="btn-primary small prod-variant-add" data-id="${prod.id}" type="button" style="height: 46px; border-radius: 16px;">Adicionar</button>
                   </div>
-                </div>
-              `).join('')}
-            </div>
-
-            <div style="padding: 16px; border-radius: 20px; border: 1px dashed rgba(148,163,184,0.3); background: rgba(0,0,0,0.15);">
-              <div style="font-weight:600; font-size:0.9rem; color: var(--muted); margin-bottom: 12px;">➕ Adicionar Nova Variação</div>
-              <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px;">
-                <div class="form-field" style="margin:0; gap:4px;">
-                  <label>Nome (Ex: Rosa)</label>
-                  <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa">
-                </div>
-                <div class="form-field" style="margin:0; gap:4px;">
-                  <label>Preço (R$)</label>
-                  <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00">
-                </div>
-                <div class="form-actions" style="margin:0;">
-                  <button class="btn-primary small prod-variant-add" data-id="${prod.id}" type="button" style="height: 46px; border-radius: 16px;">Adicionar</button>
                 </div>
               </div>
             </div>
-          </div>
-          <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px;">
-            <button class="btn small btn-primary prod-save" data-id="${prod.id}">Salvar Produto</button>
-            <button class="btn small prod-cancel" data-id="${prod.id}">Cancelar</button>
+            <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px;">
+              <button class="btn small btn-primary prod-save" data-id="${prod.id}">Salvar Produto</button>
+              <button class="btn small prod-cancel" data-id="${prod.id}">Cancelar</button>
+            </div>
           </div>
         </div>
-      </div>
-    `;
+      `;
 
-    container.appendChild(card);
+      catList.appendChild(card);
+    });
+
+    container.appendChild(catWrapper);
   });
 
+  // Event Listeners dos botões gerados
   container.querySelectorAll('.prod-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1376,17 +1426,16 @@ function renderProducts(){
     });
   });
 
-  // LÓGICA ATUALIZADA AQUI: Fecha tudo antes de abrir a edição
   container.querySelectorAll('.prod-edit-toggle').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
       const box = document.getElementById(`edit-${id}`);
       const isCurrentlyOpen = box && box.style.display === 'block';
 
-      closeAllProductPanels(); // Fecha qualquer caixa do sistema
+      closeAllProductPanels(); 
 
       if(box && !isCurrentlyOpen){
-        box.style.display = 'block'; // Abre apenas se estava fechada
+        box.style.display = 'block'; 
       }
     });
   });
@@ -1405,6 +1454,7 @@ function renderProducts(){
       const prod = state.products.find(p=>p.id === id);
       if(!prod) return;
 
+      const catEl = document.querySelector(`.edit-category[data-id="${id}"]`);
       const nameEl = document.querySelector(`.edit-name[data-id="${id}"]`);
       const hoursEl = document.querySelector(`.edit-hours[data-id="${id}"]`);
       const filEl = document.querySelector(`.edit-fil[data-id="${id}"]`);
@@ -1413,6 +1463,7 @@ function renderProducts(){
       const priceEl = document.querySelector(`.edit-price[data-id="${id}"]`);
       const descEl = document.querySelector(`.edit-desc[data-id="${id}"]`);
 
+      const category = (catEl?.value || '').trim() || 'Geral';
       const name = (nameEl?.value || '').trim();
       const hours = Number(hoursEl?.value || 0);
       const fil_g = Number(filEl?.value || 0);
@@ -1430,6 +1481,7 @@ function renderProducts(){
         return;
       }
 
+      prod.category = category;
       prod.name = name;
       prod.hours = hours;
       prod.fil_g = fil_g;
@@ -1445,7 +1497,7 @@ function renderProducts(){
         base.label = 'Padrão';
       }
 
-      const variantRows = card.querySelectorAll('.variant-row');
+      const variantRows = document.querySelectorAll(`#edit-${id} .variant-row`);
       const variants = [];
       variantRows.forEach(row=>{
         const vid = row.dataset.variantId;
@@ -1552,7 +1604,7 @@ function renderProducts(){
     });
   });
 
-  if(countEl) countEl.textContent = String(state.products.length);
+  if(countEl) countEl.textContent = String(filtered.length);
 }
 
 function openProfitCalcPreviewForProduct(productId, anchorBtn){
@@ -2577,6 +2629,7 @@ function imp3dClearAll(){
 
 /* adicionar produto (mantido) */
 function handleAddProduct(){
+  const cat = document.getElementById('prod-category')?.value.trim() || 'Geral';
   const name = document.getElementById('prod-name').value.trim();
   const hours = Number(document.getElementById('prod-hours').value || 0);
   const fil_g = Number(document.getElementById('prod-fil-g').value || 0);
@@ -2592,6 +2645,7 @@ function handleAddProduct(){
 
   const p = {
     id: Date.now().toString(),
+    category: cat, // Salva a caixa escolhida
     name,
     hours: Number(hours),
     fil_g: Number(fil_g),
@@ -2611,6 +2665,8 @@ function handleAddProduct(){
   state.products.push(p);
   saveState();
 
+  // Limpa apenas os dados do produto, MAS MANTÉM A CAIXA! 
+  // Assim você pode cadastrar vários itens seguidos na mesma caixa rapidamente.
   document.getElementById('prod-name').value = '';
   document.getElementById('prod-hours').value = '';
   document.getElementById('prod-fil-g').value = '';
@@ -2620,6 +2676,10 @@ function handleAddProduct(){
   document.getElementById('prod-desc').value = '';
 
   updateAll();
+  
+  const searchInput = document.getElementById('prod-search');
+  if(searchInput) searchInput.value = ''; // Limpa a busca ao adicionar um novo
+  renderProducts();
 }
 
 function processImp3dSale({
