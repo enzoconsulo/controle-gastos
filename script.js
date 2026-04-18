@@ -2631,16 +2631,27 @@ function processImp3dSale({
     return null;
   }
 
+  // CORREÇÃO: Calcula o valor da grama na hora da venda normal, pois 'liveFil' não tem 'pricePerGram' salvo nativamente.
+  let currentPricePerGram = 0;
+  if(fil){
+    if(fil.pricePerGram !== undefined){
+      currentPricePerGram = Number(fil.pricePerGram);
+    } else {
+      const initial = Number(fil.initialWeight || fil.weight || 0);
+      currentPricePerGram = initial > 0 ? Number(fil.price || 0) / initial : 0;
+    }
+  }
+
   const snap = snapshot || {
     salePricePerUnit: pricePerUnit,
-    unitMaterialCost: Number(prod.fil_g || 0) * (Number(fil?.pricePerGram || 0)),
+    unitMaterialCost: Number(prod.fil_g || 0) * currentPricePerGram,
     unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
     unitPackagingCost: Number(prod.pack || 0),
     filamentSnapshot: fil ? {
       id: fil.id || '',
       color: fil.color || 'Filamento',
       type: fil.type || '',
-      pricePerGram: Number(fil.pricePerGram || 0)
+      pricePerGram: currentPricePerGram
     } : null
   };
 
