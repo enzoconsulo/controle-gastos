@@ -1220,13 +1220,16 @@ function closeAllProductPanels() {
 }
 
 function renderProducts(){
+  // Atualiza as opções dinâmicas do menu de caixas sempre que renderizar
+  updateCategoryDatalist();
+
   const container = document.getElementById('prod-list');
   const countEl = document.getElementById('imp3d-count-prod');
   if(!container) return;
   
   container.innerHTML='';
 
-  // 1. Lógica de Pesquisa
+  // 1. Pesquisa
   const searchInput = document.getElementById('prod-search');
   const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
@@ -1249,7 +1252,7 @@ function renderProducts(){
     return;
   }
 
-  // 2. Agrupar produtos pelas Caixas (Categorias)
+  // 2. Agrupa pelas Caixas
   const grouped = {};
   filtered.forEach(prod => {
     const cat = prod.category || 'Geral';
@@ -1257,7 +1260,7 @@ function renderProducts(){
     grouped[cat].push(prod);
   });
 
-  // 3. Renderizar o visual agrupado por Caixas
+  // 3. Renderiza Caixas Retráteis
   Object.keys(grouped).sort().forEach(cat => {
     const catWrapper = document.createElement('div');
     catWrapper.style.marginBottom = '20px';
@@ -1266,21 +1269,36 @@ function renderProducts(){
     catWrapper.style.borderRadius = '24px';
     catWrapper.style.padding = '16px';
     
-    // Cabeçalho da Caixa
+    // Cabeçalho Clicável (Retrátil)
     catWrapper.innerHTML = `
-      <div style="display:flex; align-items:center; gap:12px; margin-bottom: 16px;">
-        <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">📦</div>
-        <div>
-          <h4 style="font-weight: 700; font-size: 1.1rem; color: #fff; line-height: 1.2;">${cat}</h4>
-          <span style="font-size: 0.8rem; color: var(--muted);">${grouped[cat].length} produto(s) nesta caixa</span>
+      <div class="box-header-toggle" style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; margin-bottom: 16px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25); border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">📦</div>
+          <div>
+            <h4 style="font-weight: 700; font-size: 1.1rem; color: #fff; line-height: 1.2;">${cat}</h4>
+            <span style="font-size: 0.8rem; color: var(--muted);">${grouped[cat].length} produto(s) nesta caixa</span>
+          </div>
         </div>
+        <div class="toggle-icon" style="font-size: 1.2rem; color: var(--muted);">▼</div>
       </div>
       <div class="cat-list" style="display:flex; flex-direction:column; gap:10px;"></div>
     `;
 
+    const headerToggle = catWrapper.querySelector('.box-header-toggle');
     const catList = catWrapper.querySelector('.cat-list');
+    const toggleIcon = catWrapper.querySelector('.toggle-icon');
 
-    // Produtos dentro desta Caixa
+    // Lógica para esconder/mostrar os itens da caixa ao clicar no título
+    headerToggle.addEventListener('click', () => {
+      if(catList.style.display === 'none'){
+        catList.style.display = 'flex';
+        toggleIcon.textContent = '▼';
+      } else {
+        catList.style.display = 'none';
+        toggleIcon.textContent = '▶';
+      }
+    });
+
     grouped[cat].forEach(prod => {
       ensureProductVariants(prod);
       const variantSummary = prod.variants.map(v => `${v.label}: ${money(v.price)}`).join(' • ');
@@ -1319,9 +1337,10 @@ function renderProducts(){
 
         <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:10px;">
           <div class="form-grid">
-            <div class="form-field">
-              <label>Caixa / Categoria</label>
-              <input class="edit-category" data-id="${prod.id}" value="${prod.category || 'Geral'}">
+            
+            <div class="form-field" style="grid-column:1/-1">
+              <label>Mover para Caixa / Categoria</label>
+              <input class="edit-category" list="box-options" data-id="${prod.id}" value="${prod.category || 'Geral'}" placeholder="Deixe em branco ou digite Geral para remover da caixa">
             </div>
             
             <div class="form-field">
@@ -1401,8 +1420,9 @@ function renderProducts(){
                 </div>
               </div>
             </div>
+
             <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px;">
-              <button class="btn small btn-primary prod-save" data-id="${prod.id}">Salvar Produto</button>
+              <button class="btn small btn-primary prod-save" data-id="${prod.id}">Salvar Alterações</button>
               <button class="btn small prod-cancel" data-id="${prod.id}">Cancelar</button>
             </div>
           </div>
@@ -1415,7 +1435,7 @@ function renderProducts(){
     container.appendChild(catWrapper);
   });
 
-  // Event Listeners dos botões gerados
+  // Eventos dos botões gerados
   container.querySelectorAll('.prod-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1432,7 +1452,7 @@ function renderProducts(){
       const box = document.getElementById(`edit-${id}`);
       const isCurrentlyOpen = box && box.style.display === 'block';
 
-      closeAllProductPanels(); 
+      if(typeof closeAllProductPanels === 'function') closeAllProductPanels();
 
       if(box && !isCurrentlyOpen){
         box.style.display = 'block'; 
@@ -1463,6 +1483,7 @@ function renderProducts(){
       const priceEl = document.querySelector(`.edit-price[data-id="${id}"]`);
       const descEl = document.querySelector(`.edit-desc[data-id="${id}"]`);
 
+      // Se apagarem o texto ou escreverem Geral, ele vai pra Geral
       const category = (catEl?.value || '').trim() || 'Geral';
       const name = (nameEl?.value || '').trim();
       const hours = Number(hoursEl?.value || 0);
@@ -1481,7 +1502,7 @@ function renderProducts(){
         return;
       }
 
-      prod.category = category;
+      prod.category = category; // Atualiza a caixa
       prod.name = name;
       prod.hours = hours;
       prod.fil_g = fil_g;
@@ -1584,14 +1605,18 @@ function renderProducts(){
   container.querySelectorAll('.prod-preview').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-      openProfitCalcPreviewForProduct(id, e.target);
+      if(typeof openProfitCalcPreviewForProduct === 'function') {
+        openProfitCalcPreviewForProduct(id, e.target);
+      }
     });
   });
 
   container.querySelectorAll('.prod-sell').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-      openSellFormForProduct(id, e.target);
+      if(typeof openSellFormForProduct === 'function') {
+        openSellFormForProduct(id, e.target);
+      }
     });
   });
 
@@ -1603,8 +1628,6 @@ function renderProducts(){
       window.location.href = `${targetPath}?prod=${encodeURIComponent(id)}`;
     });
   });
-
-  if(countEl) countEl.textContent = String(filtered.length);
 }
 
 function openProfitCalcPreviewForProduct(productId, anchorBtn){
@@ -2627,9 +2650,28 @@ function imp3dClearAll(){
   saveState(); updateAll();
 }
 
-/* adicionar produto (mantido) */
+function updateCategoryDatalist() {
+  const dl = document.getElementById('box-options');
+  if(!dl) return;
+  
+  const cats = new Set();
+  state.products.forEach(p => {
+    const c = (p.category || '').trim();
+    if(c && c.toLowerCase() !== 'geral') cats.add(c);
+  });
+  
+  dl.innerHTML = '';
+  Array.from(cats).sort().forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    dl.appendChild(opt);
+  });
+}
+
 function handleAddProduct(){
-  const cat = document.getElementById('prod-category')?.value.trim() || 'Geral';
+  const catInput = document.getElementById('prod-category')?.value.trim();
+  const cat = catInput ? catInput : 'Geral'; // Se deixar em branco, vai para "Geral"
+  
   const name = document.getElementById('prod-name').value.trim();
   const hours = Number(document.getElementById('prod-hours').value || 0);
   const fil_g = Number(document.getElementById('prod-fil-g').value || 0);
@@ -2645,7 +2687,7 @@ function handleAddProduct(){
 
   const p = {
     id: Date.now().toString(),
-    category: cat, // Salva a caixa escolhida
+    category: cat,
     name,
     hours: Number(hours),
     fil_g: Number(fil_g),
@@ -2654,19 +2696,14 @@ function handleAddProduct(){
     price: Number(price),
     desc,
     variants: [
-      {
-        id: 'default',
-        label: 'Padrão',
-        price: Number(price)
-      }
+      { id: 'default', label: 'Padrão', price: Number(price) }
     ]
   };
 
   state.products.push(p);
   saveState();
 
-  // Limpa apenas os dados do produto, MAS MANTÉM A CAIXA! 
-  // Assim você pode cadastrar vários itens seguidos na mesma caixa rapidamente.
+  // Limpa apenas os dados, mantém a Caixa preenchida para agilizar cadastros em massa
   document.getElementById('prod-name').value = '';
   document.getElementById('prod-hours').value = '';
   document.getElementById('prod-fil-g').value = '';
@@ -2678,7 +2715,7 @@ function handleAddProduct(){
   updateAll();
   
   const searchInput = document.getElementById('prod-search');
-  if(searchInput) searchInput.value = ''; // Limpa a busca ao adicionar um novo
+  if(searchInput) searchInput.value = '';
   renderProducts();
 }
 
