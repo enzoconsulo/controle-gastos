@@ -2141,7 +2141,7 @@ function sellFromStock(stockId, qtyToSell){
   );
 }
 
-function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit){
+function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit, variant = null){
   const salePrice = Number(salePricePerUnit || prod.price || 0);
   const initial = Number(fil.initialWeight || fil.weight || 0);
   const pricePerGram = initial > 0 ? Number(fil.price || 0) / initial : 0;
@@ -2151,6 +2151,8 @@ function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit){
     unitMaterialCost: Number(prod.fil_g || 0) * pricePerGram,
     unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
     unitPackagingCost: Number(prod.pack || 0),
+    variantId: variant?.id || 'default',
+    variantLabel: variant?.label || 'Padrão',
     filamentSnapshot: {
       id: fil.id,
       color: fil.color,
