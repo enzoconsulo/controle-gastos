@@ -1239,7 +1239,13 @@ function closeAllProductPanels() {
   document.querySelectorAll('[id^="imp3d-sell-form-"]').forEach(box => box.remove());
 }
 
+/* ========================================================
+   FUNÇÃO ATUALIZADA: Renderizar Produtos (MOBILE-FRIENDLY)
+   ======================================================== */
 function renderProducts(){
+  // Atualiza as opções dinâmicas do menu de caixas sempre que renderizar
+  updateCategoryDatalist();
+
   const container = document.getElementById('prod-list');
   const countEl = document.getElementById('imp3d-count-prod');
   if(!container) return;
@@ -1273,7 +1279,6 @@ function renderProducts(){
   // 2. Agrupa pelas Caixas baseando-se no state.productBoxes
   const grouped = {};
   state.productBoxes.forEach(b => grouped[b.id] = { box: b, products: [] });
-  // Fallback caso algum produto perca a caixa
   if(!grouped['box-default']) grouped['box-default'] = { box: {id: 'box-default', name: 'Geral', emoji: '📦'}, products: [] };
 
   filtered.forEach(prod => {
@@ -1282,7 +1287,7 @@ function renderProducts(){
     grouped[bId].products.push(prod);
   });
 
-  // 3. Renderiza Caixas Retráteis (Apenas caixas que tem produtos filtrados)
+  // 3. Renderiza Caixas Retráteis
   Object.values(grouped).filter(g => g.products.length > 0).forEach(group => {
     const catWrapper = document.createElement('div');
     catWrapper.style.marginBottom = '20px';
@@ -1305,7 +1310,7 @@ function renderProducts(){
         </div>
         <div class="toggle-icon" style="font-size: 1.2rem; color: var(--muted);">▼</div>
       </div>
-      <div class="cat-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+      <div class="cat-list" style="display:flex; flex-direction:column; gap:12px;"></div>
     `;
 
     const headerToggle = catWrapper.querySelector('.box-header-toggle');
@@ -1326,7 +1331,6 @@ function renderProducts(){
       ensureProductVariants(prod);
       const variantSummary = prod.variants.map(v => `${v.label}: ${money(v.price)}`).join(' • ');
 
-      // Gera as opções para o Select de Caixas dentro do modo Edição
       const boxOptionsHtml = state.productBoxes.map(b => 
         `<option value="${b.id}" ${b.id === prod.boxId ? 'selected' : ''}>${b.emoji} ${b.name}</option>`
       ).join('');
@@ -1335,35 +1339,40 @@ function renderProducts(){
       card.className = 'box-card';
       card.style.display = 'flex';
       card.style.flexDirection = 'column';
-      card.style.gap = '10px';
+      card.style.gap = '0';
 
       card.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
           <div style="min-width:0;">
-            <div style="font-weight:700">${prod.name}</div>
-            <div style="font-size:0.85rem;color:var(--muted); line-height:1.35; margin-top:4px;">
-              Horas: ${Number(prod.hours || 0).toFixed(2)}
-              — Filamento por unidade: ${Number(prod.fil_g || 0).toFixed(2)} g
-              — Custo/h: ${money(prod.energy_h || 0)}
-              — Embalagem: ${money(prod.pack || 0)}
-            </div>
-            <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
-            <div style="font-size:0.78rem;color:var(--muted-soft); margin-top:6px">${variantSummary}</div>
+            <div style="font-weight:700; font-size:1.05rem; color:#fff;">${prod.name}</div>
+            <div style="font-weight:800; font-size:1.1rem; color:var(--accent); margin-top:2px;">${money(prod.price)}</div>
           </div>
 
-          <div style="text-align:right; flex:none;">
-            <div style="font-weight:700">${money(prod.price)}</div>
-            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-              <button class="btn small prod-edit-toggle" data-id="${prod.id}">Editar</button>
-              <button class="btn small prod-preview" data-id="${prod.id}">Exibir lucro</button>
-              <button class="btn small prod-sell" data-id="${prod.id}">Vender</button>
-              <button class="btn small prod-stock" data-id="${prod.id}">Estocar</button>
-              <button class="btn small prod-del" data-id="${prod.id}">Excluir</button>
+          <div class="prod-action-menu" style="position:relative; flex:none;">
+            <button class="btn small ghost action-menu-toggle" data-id="${prod.id}" style="border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding: 8px 12px; font-size: 0.8rem; background: rgba(0,0,0,0.2);">⚙️ Opções ▼</button>
+            
+            <div id="menu-${prod.id}" class="action-dropdown" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#0f172a; border:1px solid rgba(148,163,184,0.2); border-radius:14px; padding:6px; z-index:50; min-width:170px; box-shadow:0 12px 30px rgba(0,0,0,0.6); flex-direction:column; gap:4px;">
+              <button class="btn small ghost prod-edit-toggle" data-id="${prod.id}" style="width:100%; border:none; justify-content:flex-start; font-weight:500; color:#fff;">✏️ Editar Produto</button>
+              <button class="btn small ghost prod-preview" data-id="${prod.id}" style="width:100%; border:none; justify-content:flex-start; font-weight:500; color:#fff;">📊 Calcular Lucro</button>
+              <button class="btn small ghost prod-sell" data-id="${prod.id}" style="width:100%; border:none; justify-content:flex-start; font-weight:500; color:#fff;">💰 Registrar Venda</button>
+              <button class="btn small ghost prod-stock" data-id="${prod.id}" style="width:100%; border:none; justify-content:flex-start; font-weight:500; color:#fff;">📦 Mandar pro Estoque</button>
+              <div style="height:1px; background:rgba(255,255,255,0.1); margin: 2px 0;"></div>
+              <button class="btn small ghost prod-del" data-id="${prod.id}" style="width:100%; border:none; justify-content:flex-start; font-weight:500; color:var(--danger);">🗑️ Excluir Produto</button>
             </div>
           </div>
         </div>
 
-        <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:10px;">
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+          <span style="background:rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:8px; font-size:0.75rem; color:var(--muted-soft);">⏱️ ${Number(prod.hours || 0).toFixed(2)}h</span>
+          <span style="background:rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:8px; font-size:0.75rem; color:var(--muted-soft);">⚖️ ${Number(prod.fil_g || 0).toFixed(2)}g</span>
+          <span style="background:rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:8px; font-size:0.75rem; color:var(--muted-soft);">⚡ ${money(prod.energy_h || 0)}/h</span>
+          <span style="background:rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:8px; font-size:0.75rem; color:var(--muted-soft);">📦 ${money(prod.pack || 0)} emb.</span>
+        </div>
+
+        ${prod.desc ? `<div style="font-size:0.8rem; color:var(--muted); margin-top:10px; line-height:1.4;">📝 ${prod.desc}</div>` : ''}
+        <div style="font-size:0.75rem; color:var(--muted); margin-top:8px;">🎨 Variações: <span style="color:var(--text);">${variantSummary}</span></div>
+
+        <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:14px; padding-top:14px; border-top: 1px dashed rgba(148,163,184,0.2);">
           <div class="form-grid">
             
             <div class="form-field" style="grid-column:1/-1">
@@ -1413,16 +1422,16 @@ function renderProducts(){
 
               <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
                 ${prod.variants.map(v => `
-                  <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:center; padding:12px; border-radius:18px; background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
-                    <div class="form-field" style="margin:0; gap:4px;">
+                  <div class="variant-row" data-variant-id="${v.id}" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; padding:12px; border-radius:18px; background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+                    <div class="form-field" style="margin:0; flex:1; min-width:120px;">
                       <label>Nome da variação</label>
                       <input class="variant-label" data-product="${prod.id}" data-variant="${v.id}" type="text" value="${v.label}"/>
                     </div>
-                    <div class="form-field" style="margin:0; gap:4px;">
+                    <div class="form-field" style="margin:0; flex:1; min-width:100px;">
                       <label>Preço (R$)</label>
                       <input class="variant-price" data-product="${prod.id}" data-variant="${v.id}" type="number" step="0.01" value="${v.price}"/>
                     </div>
-                    <div style="display:flex; align-items:flex-end; gap:6px; height:100%; padding-bottom:2px;">
+                    <div style="display:flex; flex:none;">
                       ${
                         v.id === 'default'
                           ? '<div style="display:flex; align-items:center; justify-content:center; height: 46px; padding: 0 16px; border-radius: 16px; background: rgba(255,255,255,0.05); color:var(--muted); font-size:0.85rem;">Padrão</div>'
@@ -1435,17 +1444,17 @@ function renderProducts(){
 
               <div style="padding: 16px; border-radius: 20px; border: 1px dashed rgba(148,163,184,0.3); background: rgba(0,0,0,0.15);">
                 <div style="font-weight:600; font-size:0.9rem; color: var(--muted); margin-bottom: 12px;">➕ Adicionar Nova Variação</div>
-                <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px;">
-                  <div class="form-field" style="margin:0; gap:4px;">
+                <div style="display:flex; flex-wrap:wrap; gap: 12px; align-items: flex-end;">
+                  <div class="form-field" style="margin:0; flex:1; min-width:120px;">
                     <label>Nome (Ex: Rosa)</label>
                     <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa">
                   </div>
-                  <div class="form-field" style="margin:0; gap:4px;">
+                  <div class="form-field" style="margin:0; flex:1; min-width:100px;">
                     <label>Preço (R$)</label>
                     <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00">
                   </div>
-                  <div class="form-actions" style="margin:0;">
-                    <button class="btn-primary small prod-variant-add" data-id="${prod.id}" type="button" style="height: 46px; border-radius: 16px;">Adicionar</button>
+                  <div class="form-actions" style="margin:0; flex:none;">
+                    <button class="btn-primary small prod-variant-add" data-id="${prod.id}" type="button" style="height: 46px; border-radius: 16px; padding: 0 20px;">Adicionar</button>
                   </div>
                 </div>
               </div>
@@ -1465,7 +1474,31 @@ function renderProducts(){
     container.appendChild(catWrapper);
   });
 
-  // Eventos dos botões gerados
+  // LÓGICA DO MENU DROPDOWN DE AÇÕES
+  container.querySelectorAll('.action-menu-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const menu = document.getElementById(`menu-${id}`);
+      const isCurrentlyVisible = menu.style.display === 'flex';
+
+      // Esconde todos os menus antes de abrir um novo
+      document.querySelectorAll('.action-dropdown').forEach(m => m.style.display = 'none');
+
+      if(!isCurrentlyVisible) {
+        menu.style.display = 'flex';
+      }
+    });
+  });
+
+  // Se clicar em qualquer opção do menu, ele fecha sozinho
+  container.querySelectorAll('.action-dropdown button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.action-dropdown').forEach(m => m.style.display = 'none');
+    });
+  });
+
+  // Eventos das ações (iguais aos de antes)
   container.querySelectorAll('.prod-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1481,12 +1514,8 @@ function renderProducts(){
       const id = e.target.dataset.id;
       const box = document.getElementById(`edit-${id}`);
       const isCurrentlyOpen = box && box.style.display === 'block';
-
       if(typeof closeAllProductPanels === 'function') closeAllProductPanels();
-
-      if(box && !isCurrentlyOpen){
-        box.style.display = 'block'; 
-      }
+      if(box && !isCurrentlyOpen) box.style.display = 'block'; 
     });
   });
 
@@ -1522,16 +1551,12 @@ function renderProducts(){
       const price = Number(priceEl?.value || 0);
       const desc = (descEl?.value || '').trim();
 
-      if(!name){
-        alert('Nome inválido.');
-        return;
-      }
-      if(fil_g <= 0 || price <= 0){
-        alert('Filamento por unidade e preço precisam ser maiores que zero.');
+      if(!name || fil_g <= 0 || price <= 0){
+        alert('Nome, filamento por unidade (g) e preço precisam ser maiores que zero.');
         return;
       }
 
-      prod.boxId = boxId; // Salva a mudança de caixa
+      prod.boxId = boxId;
       prod.name = name;
       prod.hours = hours;
       prod.fil_g = fil_g;
@@ -1543,9 +1568,7 @@ function renderProducts(){
       ensureProductVariants(prod);
       const base = prod.variants.find(v => v.id === 'default');
       if(base) base.price = price;
-      if(base && (!base.label || base.label.trim() === '')){
-        base.label = 'Padrão';
-      }
+      if(base && (!base.label || base.label.trim() === '')) base.label = 'Padrão';
 
       const variantRows = document.querySelectorAll(`#edit-${id} .variant-row`);
       const variants = [];
@@ -1553,32 +1576,20 @@ function renderProducts(){
         const vid = row.dataset.variantId;
         const labelEl = row.querySelector('.variant-label');
         const priceElRow = row.querySelector('.variant-price');
-
         const label = (labelEl?.value || '').trim();
         const vPrice = Number(priceElRow?.value || 0);
-
         if(!label || vPrice <= 0) return;
-
-        variants.push({
-          id: vid || `var-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-          label,
-          price: vPrice
-        });
+        variants.push({ id: vid || `var-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, label, price: vPrice });
       });
 
       if(!variants.some(v => v.id === 'default')){
-        variants.unshift({
-          id: 'default',
-          label: base?.label || 'Padrão',
-          price: Number(base?.price ?? price)
-        });
+        variants.unshift({ id: 'default', label: base?.label || 'Padrão', price: Number(base?.price ?? price) });
       } else {
         const def = variants.find(v => v.id === 'default');
         if(def && !def.label) def.label = base?.label || 'Padrão';
       }
 
       prod.variants = variants;
-
       saveState();
       updateAll();
     });
@@ -1596,17 +1607,9 @@ function renderProducts(){
       const label = (labelEl?.value || '').trim();
       const price = Number(priceEl?.value || 0);
 
-      if(!label || price <= 0){
-        alert('Dados da variação inválidos.');
-        return;
-      }
+      if(!label || price <= 0) return alert('Dados da variação inválidos.');
 
-      prod.variants.push({
-        id: `var-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-        label,
-        price
-      });
-
+      prod.variants.push({ id: `var-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, label, price });
       saveState();
       updateAll();
     });
@@ -1620,10 +1623,7 @@ function renderProducts(){
       if(!prod) return;
 
       ensureProductVariants(prod);
-      if(variantId === 'default'){
-        alert('A variação padrão não pode ser removida.');
-        return;
-      }
+      if(variantId === 'default') return alert('A variação padrão não pode ser removida.');
 
       prod.variants = prod.variants.filter(v => v.id !== variantId);
       saveState();
@@ -1634,18 +1634,14 @@ function renderProducts(){
   container.querySelectorAll('.prod-preview').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-      if(typeof openProfitCalcPreviewForProduct === 'function') {
-        openProfitCalcPreviewForProduct(id, e.target);
-      }
+      if(typeof openProfitCalcPreviewForProduct === 'function') openProfitCalcPreviewForProduct(id, e.target);
     });
   });
 
   container.querySelectorAll('.prod-sell').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-      if(typeof openSellFormForProduct === 'function') {
-        openSellFormForProduct(id, e.target);
-      }
+      if(typeof openSellFormForProduct === 'function') openSellFormForProduct(id, e.target);
     });
   });
 
@@ -1657,6 +1653,18 @@ function renderProducts(){
       window.location.href = `${targetPath}?prod=${encodeURIComponent(id)}`;
     });
   });
+
+  if(countEl) countEl.textContent = String(filtered.length);
+}
+
+// Fechar menus de opções se clicar fora deles
+if(!window.actionMenuListenerAdded) {
+  window.addEventListener('click', (e) => {
+    if(!e.target.closest('.prod-action-menu')) {
+      document.querySelectorAll('.action-dropdown').forEach(m => m.style.display = 'none');
+    }
+  });
+  window.actionMenuListenerAdded = true;
 }
 
 function openProfitCalcPreviewForProduct(productId, anchorBtn){
