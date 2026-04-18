@@ -1303,48 +1303,50 @@ function renderProducts(){
             <input class="edit-desc" data-id="${prod.id}" value="${prod.desc || ''}">
           </div>
 
-          <div class="prod-variants-panel" style="grid-column:1/-1; padding:10px; border-radius:12px; border:1px solid rgba(148,163,184,0.12); background:rgba(255,255,255,0.02);">
-            <div style="font-weight:700; margin-bottom:8px;">Variações de preço</div>
+          <div class="prod-variants-panel" style="grid-column:1/-1; padding:14px; border-radius:12px; border:1px solid rgba(148,163,184,0.15); background:rgba(255,255,255,0.02);">
+            <div style="font-weight:700; margin-bottom:12px; font-size:1.05rem; color:#fff;">Variações Cadastradas</div>
 
-            <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;">
+            <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
               ${prod.variants.map(v => `
-                <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 110px auto; gap:8px; align-items:center; padding:8px; border-radius:10px; background:rgba(0,0,0,0.08);">
+                <div class="variant-row" data-variant-id="${v.id}" style="display:grid; grid-template-columns:1fr 110px auto; gap:10px; align-items:center; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
                   <div>
                     <label style="font-size:0.78rem;color:var(--muted)">Nome da variação</label>
-                    <input class="variant-label" data-product="${prod.id}" data-variant="${v.id}" type="text" value="${v.label}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
+                    <input class="variant-label" data-product="${prod.id}" data-variant="${v.id}" type="text" value="${v.label}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.1); color:#fff;"/>
                   </div>
                   <div>
-                    <label style="font-size:0.78rem;color:var(--muted)">Preço</label>
-                    <input class="variant-price" data-product="${prod.id}" data-variant="${v.id}" type="number" step="0.01" value="${v.price}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
+                    <label style="font-size:0.78rem;color:var(--muted)">Preço (R$)</label>
+                    <input class="variant-price" data-product="${prod.id}" data-variant="${v.id}" type="number" step="0.01" value="${v.price}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.1); color:#fff;"/>
                   </div>
-                  <div style="display:flex; align-items:flex-end; gap:6px;">
+                  <div style="display:flex; align-items:flex-end; gap:6px; height:100%; padding-bottom:2px;">
                     ${
                       v.id === 'default'
-                        ? '<span style="font-size:0.78rem;color:var(--muted-soft);padding:8px 0;">Padrão</span>'
-                        : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}" type="button">Remover</button>`
+                        ? '<span style="font-size:0.8rem;color:var(--muted-soft);padding:6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">Padrão</span>'
+                        : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}" type="button" style="border-color: rgba(239,68,68,0.3); color: #ef4444;">Remover</button>`
                     }
                   </div>
                 </div>
               `).join('')}
             </div>
 
-            <div class="form-grid">
-              <div class="form-field">
-                <label>Nova variação</label>
-                <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa">
-              </div>
-              <div class="form-field">
-                <label>Preço da nova variação</label>
-                <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00">
-              </div>
-              <div class="form-actions" style="grid-column:1/-1;">
-                <button class="btn small prod-variant-add" data-id="${prod.id}" type="button">Adicionar variação</button>
+            <div style="padding: 12px; border-radius: 10px; border: 1px dashed rgba(148,163,184,0.3); background: rgba(0,0,0,0.15);">
+              <div style="font-weight:600; font-size:0.9rem; color: var(--muted); margin-bottom: 10px;">➕ Adicionar Nova Variação</div>
+              <div class="form-grid" style="grid-template-columns: 1fr 1fr auto; align-items: end; gap: 10px;">
+                <div class="form-field" style="margin:0;">
+                  <label style="font-size:0.78rem;">Nome (Ex: Rosa)</label>
+                  <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa" style="color: #fff; background: rgba(255,255,255,0.05);">
+                </div>
+                <div class="form-field" style="margin:0;">
+                  <label style="font-size:0.78rem;">Preço (R$)</label>
+                  <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00" style="color: #fff; background: rgba(255,255,255,0.05);">
+                </div>
+                <div class="form-actions" style="margin:0;">
+                  <button class="btn small prod-variant-add" data-id="${prod.id}" type="button" style="height: 38px; background: var(--primary); color: #000; font-weight: bold;">Adicionar</button>
+                </div>
               </div>
             </div>
           </div>
-
-          <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn small prod-save" data-id="${prod.id}">Salvar</button>
+          <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px;">
+            <button class="btn small prod-save" data-id="${prod.id}">Salvar Produto</button>
             <button class="btn small prod-cancel" data-id="${prod.id}">Cancelar</button>
           </div>
         </div>
