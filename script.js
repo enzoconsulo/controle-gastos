@@ -2206,7 +2206,7 @@ function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit, variant = null){
   };
 }
 
-function stockProduct(productId, variantId, filamentId, qty){
+function stockProduct(productId, variantId, filamentId, qty, note){
   const prod = state.products.find(p => p.id === productId);
   const fil = state.filaments.find(f => f.id === filamentId);
 
