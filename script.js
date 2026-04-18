@@ -1677,13 +1677,19 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
     profitEl.textContent = money(profit);
   }
 
-  variantSel.addEventListener('change', syncPrice);
+  // FIX AQUI: Agora ele puxa o preço da variação e manda a matemática atualizar na mesma hora
+  variantSel.addEventListener('change', ()=>{
+    syncPrice();
+    recompute();
+  });
+
   filSel.addEventListener('change', ()=>{
     const autoVariantId = matchVariantToFilament(prod, filSel.value);
     if(autoVariantId) variantSel.value = autoVariantId;
     syncPrice();
     recompute();
   });
+  
   qtyInput.addEventListener('input', recompute);
   priceInput.addEventListener('input', recompute);
 
