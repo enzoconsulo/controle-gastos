@@ -78,6 +78,28 @@ function loadState(){
         s.products.forEach(p => {
           if(p && p.energy_h === undefined) p.energy_h = 0;
           if(p && p.pack === undefined) p.pack = 0;
+      
+          if(!Array.isArray(p.variants) || !p.variants.length){
+            p.variants = [{
+              id: 'default',
+              label: 'Padrão',
+              price: Number(p.price || 0)
+            }];
+          } else {
+            p.variants = p.variants.map((v, idx)=>({
+              id: v.id || (idx === 0 ? 'default' : `var-${idx}`),
+              label: String(v.label || v.name || `Variação ${idx + 1}`).trim(),
+              price: Number(v.price ?? p.price ?? 0)
+            }));
+      
+            if(!p.variants.some(v => v.id === 'default')){
+              p.variants.unshift({
+                id: 'default',
+                label: 'Padrão',
+                price: Number(p.price || 0)
+              });
+            }
+          }
         });
       }
       if(!s.impSales) s.impSales = [];
@@ -1191,6 +1213,11 @@ function renderProducts(){
   }
 
   state.products.forEach(prod=>{
+    ensureProductVariants(prod);
+    const variantSummary = prod.variants
+      .map(v => `${v.label}: ${money(v.price)}`)
+      .join(' • ');
+
     const card = document.createElement('div');
     card.className = 'box-card';
     card.style.display = 'flex';
@@ -1207,7 +1234,8 @@ function renderProducts(){
             — Custo/h: ${money(prod.energy_h || 0)}
             — Embalagem: ${money(prod.pack || 0)}
           </div>
-          <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
+          <div style="font-size:0.82rem;color:var(--muted); margin-top:6px">${prod.desc || ''}</div>
+          <div style="font-size:0.78rem;color:var(--muted-soft); margin-top:6px">${variantSummary}</div>
         </div>
 
         <div style="text-align:right; flex:none;">
@@ -1222,10 +1250,8 @@ function renderProducts(){
         </div>
       </div>
 
-      <!-- FORM DE EDIÇÃO -->
       <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:10px;">
         <div class="form-grid">
-
           <div class="form-field">
             <label>Nome</label>
             <input class="edit-name" data-id="${prod.id}" value="${prod.name}">
@@ -1252,7 +1278,7 @@ function renderProducts(){
           </div>
 
           <div class="form-field">
-            <label>Preço</label>
+            <label>Preço base</label>
             <input type="number" step="0.01" class="edit-price" data-id="${prod.id}" value="${prod.price}">
           </div>
 
@@ -1261,11 +1287,44 @@ function renderProducts(){
             <input class="edit-desc" data-id="${prod.id}" value="${prod.desc || ''}">
           </div>
 
+          <div class="prod-variants-panel" style="grid-column:1/-1; padding:10px; border-radius:12px; border:1px solid rgba(148,163,184,0.12); background:rgba(255,255,255,0.02);">
+            <div style="font-weight:700; margin-bottom:8px;">Variações de preço</div>
+
+            <div class="variant-list" id="variant-list-${prod.id}" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;">
+              ${prod.variants.map(v => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px; border-radius:10px; background:rgba(0,0,0,0.08);">
+                  <div style="min-width:0;">
+                    <div style="font-weight:600">${v.label}</div>
+                    <div style="font-size:0.82rem; color:var(--muted);">${money(v.price)}</div>
+                  </div>
+                  <div style="display:flex; gap:6px; flex:none;">
+                    ${v.id === 'default'
+                      ? '<span style="font-size:0.78rem;color:var(--muted-soft);align-self:center;">Padrão</span>'
+                      : `<button class="btn small prod-variant-del" data-product="${prod.id}" data-variant="${v.id}">Remover</button>`}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="form-grid">
+              <div class="form-field">
+                <label>Nova variação</label>
+                <input type="text" class="variant-new-label" data-id="${prod.id}" placeholder="Ex: Rosa">
+              </div>
+              <div class="form-field">
+                <label>Preço da variação</label>
+                <input type="number" step="0.01" class="variant-new-price" data-id="${prod.id}" placeholder="Ex: 15.00">
+              </div>
+              <div class="form-actions" style="grid-column:1/-1;">
+                <button class="btn small prod-variant-add" data-id="${prod.id}" type="button">Adicionar variação</button>
+              </div>
+            </div>
+          </div>
+
           <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn small prod-save" data-id="${prod.id}">Salvar</button>
             <button class="btn small prod-cancel" data-id="${prod.id}">Cancelar</button>
           </div>
-
         </div>
       </div>
     `;
@@ -1273,7 +1332,6 @@ function renderProducts(){
     container.appendChild(card);
   });
 
-  // excluir
   container.querySelectorAll('.prod-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1284,7 +1342,6 @@ function renderProducts(){
     });
   });
 
-  // abrir/fechar edição
   container.querySelectorAll('.prod-edit-toggle').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1295,7 +1352,6 @@ function renderProducts(){
     });
   });
 
-  // cancelar edição
   container.querySelectorAll('.prod-cancel').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1304,7 +1360,6 @@ function renderProducts(){
     });
   });
 
-  // salvar edição
   container.querySelectorAll('.prod-save').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1344,12 +1399,69 @@ function renderProducts(){
       prod.price = price;
       prod.desc = desc;
 
+      ensureProductVariants(prod);
+      const base = prod.variants.find(v => v.id === 'default');
+      if(base) base.price = price;
+
       saveState();
       updateAll();
     });
   });
 
-  // exibir cálculo de lucro
+  container.querySelectorAll('.prod-variant-add').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      const prod = state.products.find(p=>p.id === id);
+      if(!prod) return;
+
+      ensureProductVariants(prod);
+
+      const labelEl = document.querySelector(`.variant-new-label[data-id="${id}"]`);
+      const priceEl = document.querySelector(`.variant-new-price[data-id="${id}"]`);
+      const label = (labelEl?.value || '').trim();
+      const price = Number(priceEl?.value || 0);
+
+      if(!label){
+        alert('Dê um nome para a variação.');
+        return;
+      }
+      if(price <= 0){
+        alert('Preço inválido.');
+        return;
+      }
+
+      prod.variants.push({
+        id: `var-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        label,
+        price
+      });
+
+      labelEl.value = '';
+      priceEl.value = '';
+      saveState();
+      updateAll();
+    });
+  });
+
+  container.querySelectorAll('.prod-variant-del').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const productId = e.target.dataset.product;
+      const variantId = e.target.dataset.variant;
+      const prod = state.products.find(p=>p.id === productId);
+      if(!prod) return;
+
+      ensureProductVariants(prod);
+      if(variantId === 'default'){
+        alert('A variação padrão não pode ser removida.');
+        return;
+      }
+
+      prod.variants = prod.variants.filter(v => v.id !== variantId);
+      saveState();
+      updateAll();
+    });
+  });
+
   container.querySelectorAll('.prod-preview').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1357,7 +1469,6 @@ function renderProducts(){
     });
   });
 
-  // vender
   container.querySelectorAll('.prod-sell').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1365,7 +1476,6 @@ function renderProducts(){
     });
   });
 
-  // estocar
   container.querySelectorAll('.prod-stock').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
@@ -1390,6 +1500,8 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
   const prod = state.products.find(p=>p.id === productId);
   if(!prod) return;
 
+  ensureProductVariants(prod);
+
   const form = document.createElement('div');
   form.id = 'imp3d-profit-preview-' + productId;
   form.style.marginTop = '10px';
@@ -1405,6 +1517,11 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
     </div>
 
     <div class="form-grid">
+      <div class="form-field">
+        <label>Variação</label>
+        <select id="${form.id}-variant"></select>
+      </div>
+
       <div class="form-field">
         <label>Filamento</label>
         <select id="${form.id}-fil"></select>
@@ -1432,9 +1549,15 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
   const card = anchorBtn.closest('.box-card');
   card.parentNode.insertBefore(form, card.nextSibling);
 
+  const variantSel = document.getElementById(`${form.id}-variant`);
   const filSel = document.getElementById(`${form.id}-fil`);
-  filSel.innerHTML = '';
+  const qtyInput = document.getElementById(`${form.id}-qty`);
+  const priceInput = document.getElementById(`${form.id}-price`);
+  const closeBtn = document.getElementById(`${form.id}-close`);
 
+  fillVariantSelect(variantSel, prod, 'default');
+
+  filSel.innerHTML = '';
   state.filaments.forEach(f=>{
     const opt = document.createElement('option');
     opt.value = f.id;
@@ -1449,9 +1572,10 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
     filSel.appendChild(opt);
   }
 
-  const qtyInput = document.getElementById(`${form.id}-qty`);
-  const priceInput = document.getElementById(`${form.id}-price`);
-  const closeBtn = document.getElementById(`${form.id}-close`);
+  function syncPrice(){
+    const v = getProductVariant(prod, variantSel.value);
+    if(v) priceInput.value = Number(v.price || 0).toFixed(2);
+  }
 
   function recompute(){
     const fil = state.filaments.find(f => f.id === filSel.value);
@@ -1496,7 +1620,13 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
     profitEl.textContent = money(profit);
   }
 
-  filSel.addEventListener('change', recompute);
+  variantSel.addEventListener('change', syncPrice);
+  filSel.addEventListener('change', ()=>{
+    const autoVariantId = matchVariantToFilament(prod, filSel.value);
+    if(autoVariantId) variantSel.value = autoVariantId;
+    syncPrice();
+    recompute();
+  });
   qtyInput.addEventListener('input', recompute);
   priceInput.addEventListener('input', recompute);
 
@@ -1504,6 +1634,7 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
     form.remove();
   });
 
+  syncPrice();
   setTimeout(recompute, 50);
 }
 
@@ -1771,6 +1902,9 @@ function openSellFormForProduct(productId, anchorBtn){
 
   const prod = state.products.find(p=>p.id===productId);
   if(!prod) return;
+
+  ensureProductVariants(prod);
+
   const form = document.createElement('div');
   form.id = 'imp3d-sell-form-'+productId;
   form.style.marginTop = '8px';
@@ -1778,8 +1912,13 @@ function openSellFormForProduct(productId, anchorBtn){
   form.style.background = 'rgba(0,0,0,0.06)';
   form.style.borderRadius = '8px';
   form.style.border = '1px solid rgba(255,255,255,0.03)';
+
   form.innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div style="flex:1; min-width:160px">
+        <label style="font-size:0.85rem;color:var(--muted)">Variação</label>
+        <select id="sell-variant-${productId}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"></select>
+      </div>
       <div style="flex:1; min-width:160px">
         <label style="font-size:0.85rem;color:var(--muted)">Filamento</label>
         <select id="sell-fil-${productId}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"></select>
@@ -1789,12 +1928,12 @@ function openSellFormForProduct(productId, anchorBtn){
         <input id="sell-qty-${productId}" type="number" step="1" value="1" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
       </div>
       <div style="flex:1; min-width:140px">
-        <label style="font-size:0.85rem;color:var(--muted)">Conta (recebe valor) — será registrado na Shopee por padrão</label>
+        <label style="font-size:0.85rem;color:var(--muted)">Conta (recebe valor)</label>
         <select id="sell-acc-${productId}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"></select>
       </div>
       <div style="width:120px">
         <label style="font-size:0.85rem;color:var(--muted)">Preço (R$)</label>
-        <input id="sell-price-${productId}" type="number" step="0.01" value="${prod.price}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
+        <input id="sell-price-${productId}" type="number" step="0.01" value="${Number(prod.price || 0)}" style="width:100%;padding:8px;border-radius:8px;background:#020617;border:1px solid rgba(255,255,255,0.03)"/>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <button id="sell-confirm-${productId}" class="btn-primary">Confirmar venda</button>
@@ -1802,10 +1941,13 @@ function openSellFormForProduct(productId, anchorBtn){
       </div>
     </div>
   `;
+
   const card = anchorBtn.closest('.box-card');
   card.parentNode.insertBefore(form, card.nextSibling);
 
-  // popular selects
+  const variantSel = document.getElementById(`sell-variant-${productId}`);
+  fillVariantSelect(variantSel, prod, 'default');
+
   const filSel = document.getElementById(`sell-fil-${productId}`);
   filSel.innerHTML = '';
   state.filaments.forEach(f=>{
@@ -1829,21 +1971,52 @@ function openSellFormForProduct(productId, anchorBtn){
   });
   if(state.accounts.some(a=>a.id==='shopee')) accSel.value = 'shopee';
 
-  // listeners
+  const qtyInput = document.getElementById(`sell-qty-${productId}`);
+  const priceInput = document.getElementById(`sell-price-${productId}`);
+
+  function syncPriceAndVariant(){
+    const selectedVariantId = variantSel.value || 'default';
+    const selectedFilId = filSel.value;
+
+    const autoVariantId = selectedFilId ? matchVariantToFilament(prod, selectedFilId) : selectedVariantId;
+    if(autoVariantId && autoVariantId !== variantSel.value){
+      variantSel.value = autoVariantId;
+    }
+
+    const v = getProductVariant(prod, variantSel.value);
+    if(v){
+      priceInput.value = Number(v.price || 0).toFixed(2);
+    }
+  }
+
+  variantSel.addEventListener('change', ()=>{
+    const v = getProductVariant(prod, variantSel.value);
+    if(v) priceInput.value = Number(v.price || 0).toFixed(2);
+  });
+
+  filSel.addEventListener('change', syncPriceAndVariant);
+
   document.getElementById(`sell-cancel-${productId}`).addEventListener('click', ()=>{
     form.remove();
   });
 
   document.getElementById(`sell-confirm-${productId}`).addEventListener('click', ()=>{
-    const filId = document.getElementById(`sell-fil-${productId}`).value;
-    const qty = Number(document.getElementById(`sell-qty-${productId}`).value || 0);
-    const accId = document.getElementById(`sell-acc-${productId}`).value;
-    const price = Number(document.getElementById(`sell-price-${productId}`).value || 0);
-    if(!filId || qty <= 0 || !accId || price <= 0){ alert('Preencha filamento, quantidade, conta e preço corretos.'); return; }
-    // efetuar venda
+    const filId = filSel.value;
+    const qty = Number(qtyInput.value || 0);
+    const accId = accSel.value;
+    const price = Number(priceInput.value || 0);
+    const variantId = variantSel.value || 'default';
+
+    if(!filId || qty <= 0 || !accId || price <= 0){
+      alert('Preencha filamento, quantidade, conta e preço corretos.');
+      return;
+    }
+
     sellProduct(productId, filId, accId, qty, price);
     form.remove();
   });
+
+  syncPriceAndVariant();
 }
 
 function sellFromStock(stockId, qtyToSell){
@@ -2332,7 +2505,14 @@ function handleAddProduct(){
     energy_h: Number(energy_h),
     pack: Number(pack),
     price: Number(price),
-    desc
+    desc,
+    variants: [
+      {
+        id: 'default',
+        label: 'Padrão',
+        price: Number(price)
+      }
+    ]
   };
 
   state.products.push(p);
@@ -2726,6 +2906,89 @@ function updateImp3dAccountBalances(){
 
   if(shopeeEl){
     shopeeEl.textContent = shopeeAcc ? money(shopeeAcc.saldo || 0) : '—';
+  }
+}
+
+function ensureProductVariants(prod){
+  if(!prod) return [];
+
+  if(!Array.isArray(prod.variants) || !prod.variants.length){
+    prod.variants = [{
+      id: 'default',
+      label: 'Padrão',
+      price: Number(prod.price || 0)
+    }];
+  } else {
+    prod.variants = prod.variants.map((v, idx)=>({
+      id: v.id || (idx === 0 ? 'default' : `var-${idx}`),
+      label: String(v.label || v.name || `Variação ${idx + 1}`).trim(),
+      price: Number(v.price ?? prod.price ?? 0)
+    }));
+
+    if(!prod.variants.some(v => v.id === 'default')){
+      prod.variants.unshift({
+        id: 'default',
+        label: 'Padrão',
+        price: Number(prod.price || 0)
+      });
+    }
+  }
+
+  return prod.variants;
+}
+
+function getProductVariant(prod, variantId){
+  const variants = ensureProductVariants(prod);
+  return variants.find(v => v.id === variantId) || variants[0];
+}
+
+function getProductVariantPrice(prod, variantId){
+  const v = getProductVariant(prod, variantId);
+  return Number(v?.price ?? prod?.price ?? 0);
+}
+
+function getProductVariantLabel(prod, variantId){
+  const v = getProductVariant(prod, variantId);
+  return v ? v.label : 'Padrão';
+}
+
+function matchVariantToFilament(prod, filamentId){
+  const fil = state.filaments.find(f => f.id === filamentId);
+  const variants = ensureProductVariants(prod);
+
+  if(!fil || !variants.length) return variants[0]?.id || 'default';
+
+  const needle = String(fil.color || fil.type || '').toLowerCase().trim();
+
+  if(!needle) return variants[0]?.id || 'default';
+
+  const exact = variants.find(v =>
+    String(v.label || '').toLowerCase().includes(needle) ||
+    String(v.id || '').toLowerCase().includes(needle)
+  );
+
+  return exact ? exact.id : (variants[0]?.id || 'default');
+}
+
+function fillVariantSelect(selectEl, prod, selectedId){
+  if(!selectEl || !prod) return;
+
+  const variants = ensureProductVariants(prod);
+  selectEl.innerHTML = '';
+
+  variants.forEach(v=>{
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = `${v.label} — ${money(v.price)}`;
+    selectEl.appendChild(opt);
+  });
+
+  if(selectedId && variants.some(v => v.id === selectedId)){
+    selectEl.value = selectedId;
+  } else if(variants.some(v => v.id === 'default')){
+    selectEl.value = 'default';
+  } else if(variants.length){
+    selectEl.value = variants[0].id;
   }
 }
 
