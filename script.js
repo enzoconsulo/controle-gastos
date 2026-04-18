@@ -1175,76 +1175,216 @@ function handleAddFilament(){
 /* Render produtos list (mantido) */
 function renderProducts(){
   const container = document.getElementById('prod-list');
-  const countEl = document.getElementById('imp3d-count-prod');
-  if(countEl) countEl.textContent = String(state.products.length);
   if(!container) return;
   container.innerHTML='';
+
   if(!state.products.length){
-    const p = document.createElement('p'); p.className='muted'; p.textContent = 'Nenhum produto cadastrado.';
+    const p = document.createElement('p');
+    p.className='muted';
+    p.textContent = 'Nenhum produto cadastrado.';
     container.appendChild(p);
-    if(document.getElementById('imp3d-count-prod')) document.getElementById('imp3d-count-prod').textContent = '0';
+
+    if(document.getElementById('imp3d-count-prod')){
+      document.getElementById('imp3d-count-prod').textContent = '0';
+    }
     return;
   }
+
   state.products.forEach(prod=>{
     const card = document.createElement('div');
     card.className = 'box-card';
     card.style.display = 'flex';
-    card.style.justifyContent = 'space-between';
-    card.style.alignItems = 'center';
+    card.style.flexDirection = 'column';
+    card.style.gap = '10px';
+
     card.innerHTML = `
-      <div>
-        <div style="font-weight:700">${prod.name}</div>
-        <div style="font-size:0.85rem;color:var(--muted);">
-          Horas: ${Number(prod.hours || 0).toFixed(2)}
-          — Filamento por unidade: ${Number(prod.fil_g).toFixed(2)} g
-          — Custo/h: ${money(prod.energy_h || 0)}
-          — Embalagem: ${money(prod.pack || 0)}
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-weight:700">${prod.name}</div>
+          <div style="font-size:0.85rem;color:var(--muted);">
+            ${Number(prod.hours || 0).toFixed(2)}h • 
+            ${Number(prod.fil_g || 0).toFixed(2)}g • 
+            Energia: ${money(prod.energy_h || 0)}/h • 
+            Embalagem: ${money(prod.pack || 0)}
+          </div>
+          <div style="font-size:0.8rem;color:var(--muted); margin-top:4px;">
+            ${prod.desc || ''}
+          </div>
         </div>
-        <div style="font-size:0.85rem;color:var(--muted); margin-top:6px">${prod.desc||''}</div>
+
+        <div style="text-align:right">
+          <div style="font-weight:700">${money(prod.price)}</div>
+          <div style="margin-top:6px">
+            <button class="btn small prod-edit-toggle" data-id="${prod.id}">Editar</button>
+            <button class="btn small prod-del" data-id="${prod.id}">Excluir</button>
+          </div>
+        </div>
       </div>
-      <div style="text-align:right">
-        <div style="font-weight:700">${money(prod.price)}</div>
-        <div style="margin-top:8px">
-          <button class="btn small prod-stock" data-id="${prod.id}">Estocar</button>
-          <button class="btn small prod-sell" data-id="${prod.id}">Vender</button>
-          <button class="btn small prod-del" data-id="${prod.id}">Excluir</button>
+
+      <!-- FORM EDIT -->
+      <div class="prod-edit-box" id="edit-${prod.id}" style="display:none; margin-top:10px;">
+        <div class="form-grid">
+
+          <div class="form-field">
+            <label>Nome</label>
+            <input class="edit-name" data-id="${prod.id}" value="${prod.name}">
+          </div>
+
+          <div class="form-field">
+            <label>Horas</label>
+            <input type="number" step="0.1" class="edit-hours" data-id="${prod.id}" value="${prod.hours}">
+          </div>
+
+          <div class="form-field">
+            <label>Filamento (g)</label>
+            <input type="number" step="0.01" class="edit-fil" data-id="${prod.id}" value="${prod.fil_g}">
+          </div>
+
+          <div class="form-field">
+            <label>Energia (R$/h)</label>
+            <input type="number" step="0.01" class="edit-energy" data-id="${prod.id}" value="${prod.energy_h}">
+          </div>
+
+          <div class="form-field">
+            <label>Embalagem</label>
+            <input type="number" step="0.01" class="edit-pack" data-id="${prod.id}" value="${prod.pack}">
+          </div>
+
+          <div class="form-field">
+            <label>Preço</label>
+            <input type="number" step="0.01" class="edit-price" data-id="${prod.id}" value="${prod.price}">
+          </div>
+
+          <div class="form-field" style="grid-column:1/-1">
+            <label>Descrição</label>
+            <input class="edit-desc" data-id="${prod.id}" value="${prod.desc || ''}">
+          </div>
+
+          <div style="grid-column:1/-1; display:flex; gap:8px;">
+            <button class="btn small prod-save" data-id="${prod.id}">Salvar</button>
+            <button class="btn small prod-cancel" data-id="${prod.id}">Cancelar</button>
+          </div>
+
         </div>
       </div>
     `;
+
     container.appendChild(card);
   });
 
-  // events
+  // 🔴 EXCLUIR
   container.querySelectorAll('.prod-del').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
       if(!confirm('Excluir produto?')) return;
+
       state.products = state.products.filter(p=>p.id !== id);
-      saveState(); updateAll();
+      saveState(); 
+      updateAll();
     });
   });
 
-  container.querySelectorAll('.prod-sell').forEach(b=>{
+  // 🟡 TOGGLE EDIT
+  container.querySelectorAll('.prod-edit-toggle').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-      openSellFormForProduct(id, e.target);
-    });
-  });
-  
-  container.querySelectorAll('.prod-stock').forEach(b=>{
-    b.addEventListener('click', e=>{
-      const id = e.target.dataset.id;
-      
-      // Verifica se a URL atual já está dentro da pasta 'impressora3d'
-      const inSubFolder = window.location.pathname.includes('/impressora3d/');
-      
-      // Se já estiver na pasta, vai direto para o arquivo. Se estiver na raiz, adiciona a pasta.
-      const targetPath = inSubFolder ? 'estoque.html' : 'impressora3d/estoque.html';
-      
-      window.location.href = `${targetPath}?prod=${encodeURIComponent(id)}`;
+      const box = document.getElementById(`edit-${id}`);
+      if(box){
+        box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      }
     });
   });
 
+  // ❌ CANCELAR
+  container.querySelectorAll('.prod-cancel').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      const box = document.getElementById(`edit-${id}`);
+      if(box) box.style.display = 'none';
+    });
+  });
+
+  // 💾 SALVAR
+  container.querySelectorAll('.prod-save').forEach(b=>{
+    b.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      const prod = state.products.find(p=>p.id === id);
+      if(!prod) return;
+
+      prod.name = document.querySelector(`.edit-name[data-id="${id}"]`).value.trim();
+      prod.hours = Number(document.querySelector(`.edit-hours[data-id="${id}"]`).value || 0);
+      prod.fil_g = Number(document.querySelector(`.edit-fil[data-id="${id}"]`).value || 0);
+      prod.energy_h = Number(document.querySelector(`.edit-energy[data-id="${id}"]`).value || 0);
+      prod.pack = Number(document.querySelector(`.edit-pack[data-id="${id}"]`).value || 0);
+      prod.price = Number(document.querySelector(`.edit-price[data-id="${id}"]`).value || 0);
+      prod.desc = document.querySelector(`.edit-desc[data-id="${id}"]`).value.trim();
+
+      saveState();
+      updateAll();
+    });
+  });
+
+  // contador
+  if(document.getElementById('imp3d-count-prod')){
+    document.getElementById('imp3d-count-prod').textContent = String(state.products.length);
+  }
+}
+
+function editProduct(productId){
+  const prod = state.products.find(p => p.id === productId);
+  if(!prod){
+    alert('Produto não encontrado.');
+    return;
+  }
+
+  const newName = prompt('Nome do produto:', prod.name);
+  if(newName === null) return;
+
+  const newHours = prompt('Horas de impressão:', String(prod.hours ?? 0));
+  if(newHours === null) return;
+
+  const newFilG = prompt('Filamento por unidade (g):', String(prod.fil_g ?? 0));
+  if(newFilG === null) return;
+
+  const newEnergy = prompt('Custo energia (R$/h):', String(prod.energy_h ?? 0));
+  if(newEnergy === null) return;
+
+  const newPack = prompt('Custo embalagem (R$):', String(prod.pack ?? 0));
+  if(newPack === null) return;
+
+  const newPrice = prompt('Preço de venda (R$):', String(prod.price ?? 0));
+  if(newPrice === null) return;
+
+  const newDesc = prompt('Descrição (opcional):', prod.desc || '');
+  if(newDesc === null) return;
+
+  const name = newName.trim();
+  const hours = Number(newHours || 0);
+  const fil_g = Number(newFilG || 0);
+  const energy_h = Number(newEnergy || 0);
+  const pack = Number(newPack || 0);
+  const price = Number(newPrice || 0);
+  const desc = newDesc.trim();
+
+  if(!name){
+    alert('Nome inválido.');
+    return;
+  }
+  if(fil_g <= 0 || price <= 0){
+    alert('Filamento por unidade e preço de venda precisam ser maiores que zero.');
+    return;
+  }
+
+  prod.name = name;
+  prod.hours = hours;
+  prod.fil_g = fil_g;
+  prod.energy_h = energy_h;
+  prod.pack = pack;
+  prod.price = price;
+  prod.desc = desc;
+
+  saveState();
+  updateAll();
 }
 
 /* abre formulário de retirada/perda de filamento inline */
