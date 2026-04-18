@@ -34,28 +34,44 @@
           <span class="imp3d-folder-kicker">Arquivo 03</span>
           <h3 class="card-title">🏭 Estocar produto</h3>
         </div>
-        <span class="imp3d-folder-badge">Lote congelado</span>
+        <span class="imp3d-folder-badge">Lote com variação</span>
       </div>
 
-      <p class="panel-subtitle">Produza itens sem contabilizar venda ainda.</p>
+      <p class="panel-subtitle">
+        Escolha o produto, a variação e o filamento usado. O lote guarda esses dados para continuar vendável mesmo depois.
+      </p>
 
       <div class="form-grid imp3d-form-grid">
         <div class="form-field">
           <label>Produto</label>
           <select id="stock-prod"></select>
         </div>
+
+        <div class="form-field">
+          <label>Variação</label>
+          <select id="stock-variant"></select>
+        </div>
+
         <div class="form-field">
           <label>Filamento</label>
           <select id="stock-fil"></select>
         </div>
+
         <div class="form-field">
           <label>Quantidade</label>
           <input id="stock-qty" type="number" step="1" placeholder="Qtd"/>
         </div>
+
         <div class="form-field">
           <label>Observação</label>
           <input id="stock-note" type="text" placeholder="Opcional"/>
         </div>
+
+        <div class="form-field">
+          <label>Preço da variação</label>
+          <input id="stock-variant-price" type="text" readonly value="R$ 0,00"/>
+        </div>
+
         <div class="form-actions">
           <button id="stock-add" class="btn-primary" type="button">Estocar produto</button>
         </div>
@@ -65,11 +81,13 @@
         <h4>Estoque de produtos</h4>
         <span class="imp3d-mini-note">por lote</span>
       </div>
+
       <div class="table-wrapper imp3d-table-wrap">
         <table>
           <thead>
             <tr>
               <th>Produto</th>
+              <th>Variação</th>
               <th>Qtd</th>
               <th>Custo médio/un</th>
               <th>Custo total</th>
@@ -81,7 +99,7 @@
       </div>
 
       <div style="margin-top:14px">
-        <h3 class="card-title">Vender lote</h3>
+        <h3 class="card-title">Vender do estoque</h3>
         <div class="form-grid imp3d-form-grid">
           <div class="form-field">
             <label>Item em estoque</label>
@@ -102,13 +120,67 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="../script.js?v=8"></script>
   <script src="../sync-pluggy-ui.js?v=8"></script>
+
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const prodId = new URLSearchParams(location.search).get('prod');
-      const sel = document.getElementById('stock-prod');
-      if(prodId && sel){
-        sel.value = prodId;
+      const prodSel = document.getElementById('stock-prod');
+      const variantSel = document.getElementById('stock-variant');
+      const pricePreview = document.getElementById('stock-variant-price');
+
+      const params = new URLSearchParams(location.search);
+      const prodIdFromUrl = params.get('prod');
+
+      function syncVariantUI(){
+        const prod = window.state && window.state.products
+          ? window.state.products.find(p => p.id === prodSel.value)
+          : null;
+
+        if(!prod){
+          if(variantSel) variantSel.innerHTML = '<option value="">Selecione um produto</option>';
+          if(pricePreview) pricePreview.value = 'R$ 0,00';
+          return;
+        }
+
+        if(typeof ensureProductVariants === 'function'){
+          ensureProductVariants(prod);
+        }
+
+        if(typeof fillVariantSelect === 'function'){
+          fillVariantSelect(variantSel, prod, variantSel.value || 'default');
+        } else {
+          variantSel.innerHTML = '';
+          (prod.variants || [{
+            id: 'default',
+            label: 'Padrão',
+            price: Number(prod.price || 0)
+          }]).forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = `${v.label} — ${money(v.price)}`;
+            variantSel.appendChild(opt);
+          });
+        }
+
+        const variant = (typeof getProductVariant === 'function')
+          ? getProductVariant(prod, variantSel.value)
+          : (prod.variants || [])[0];
+
+        const vPrice = Number(variant?.price ?? prod.price ?? 0);
+        if(pricePreview) pricePreview.value = money(vPrice);
       }
+
+      if(prodSel){
+        prodSel.addEventListener('change', syncVariantUI);
+      }
+      if(variantSel){
+        variantSel.addEventListener('change', syncVariantUI);
+      }
+
+      if(prodIdFromUrl && prodSel){
+        prodSel.value = prodIdFromUrl;
+      }
+
+      syncVariantUI();
     });
   </script>
 </body>
