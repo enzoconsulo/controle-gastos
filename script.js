@@ -1011,6 +1011,9 @@ function getFilamentPricePerGram(f){
 
 function populateImp3dStockSelects(){
   const stockProd = document.getElementById('stock-prod');
+  const stockVariant = document.getElementById('stock-variant');
+  const stockFil = document.getElementById('stock-fil');
+
   if(stockProd){
     const current = stockProd.value;
     stockProd.innerHTML = '';
@@ -1030,7 +1033,34 @@ function populateImp3dStockSelects(){
     }
   }
 
-  const stockFil = document.getElementById('stock-fil');
+  if(stockVariant){
+    const prod = state.products.find(p => p.id === (stockProd?.value || ''));
+    const currentVariant = stockVariant.value;
+    stockVariant.innerHTML = '';
+
+    if(!prod){
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = 'Selecione um produto';
+      stockVariant.appendChild(o);
+    } else {
+      ensureProductVariants(prod);
+
+      prod.variants.forEach(v=>{
+        const o = document.createElement('option');
+        o.value = v.id;
+        o.textContent = `${v.label} — ${money(v.price)}`;
+        stockVariant.appendChild(o);
+      });
+
+      if(currentVariant && prod.variants.some(v => v.id === currentVariant)){
+        stockVariant.value = currentVariant;
+      } else {
+        stockVariant.value = prod.variants[0]?.id || 'default';
+      }
+    }
+  }
+
   if(stockFil){
     const current = stockFil.value;
     stockFil.innerHTML = '';
@@ -2151,23 +2181,22 @@ function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit, variant = null){
     unitMaterialCost: Number(prod.fil_g || 0) * pricePerGram,
     unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
     unitPackagingCost: Number(prod.pack || 0),
+
     variantId: variant?.id || 'default',
-    variantLabel: variant?.label || 'Padrão',
-    filamentSnapshot: {
-      id: fil.id,
-      color: fil.color,
-      type: fil.type,
-      price: Number(fil.price || 0),
-      initialWeight: Number(fil.initialWeight || fil.weight || 0),
-      pricePerGram
-    }
+    variantLabel: variant?.label || 'Padrão'
   };
 }
 
-function stockProduct(productId, filamentId, qty){
+function stockProduct(productId, variantId, filamentId, qty){
   const prod = state.products.find(p => p.id === productId);
   const fil = state.filaments.find(f => f.id === filamentId);
+
   if(!prod || !fil) return alert('Produto ou filamento inválido');
+
+  ensureProductVariants(prod);
+
+  const variant = getProductVariant(prod, variantId || 'default') || getProductVariant(prod, 'default');
+  if(!variant) return alert('Variação inválida');
 
   qty = Number(qty || 0);
   if(qty <= 0) return alert('Quantidade inválida');
@@ -2178,7 +2207,7 @@ function stockProduct(productId, filamentId, qty){
     if(!confirm('Filamento insuficiente. Deseja permitir negativo?')) return;
   }
 
-  const snapshot = buildImp3dUnitSnapshot(prod, fil, prod.price);
+  const snapshot = buildImp3dUnitSnapshot(prod, fil, variant.price, variant);
 
   fil.weight = Number(fil.weight || 0) - totalFilNeeded;
 
@@ -2186,6 +2215,9 @@ function stockProduct(productId, filamentId, qty){
     id: Date.now().toString(),
     date: todayISO(),
     productId,
+    variantId: variant.id,
+    variantLabel: variant.label,
+    variantPrice: Number(variant.price || 0),
     filamentId,
     qty: Number(qty),
     snapshot
@@ -2860,18 +2892,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const impClearBtn = document.getElementById('imp3d-clear');
   if(impClearBtn) impClearBtn.addEventListener('click', imp3dClearAll);
 
-    const stockAddBtn = document.getElementById('stock-add');
+  const stockAddBtn = document.getElementById('stock-add');
   if(stockAddBtn) stockAddBtn.addEventListener('click', ()=>{
     const productId = document.getElementById('stock-prod')?.value || '';
+    const variantId = document.getElementById('stock-variant')?.value || 'default';
     const filamentId = document.getElementById('stock-fil')?.value || '';
     const qty = Number(document.getElementById('stock-qty')?.value || 0);
-
-    if(!productId || !filamentId || qty <= 0){
-      alert('Selecione produto, filamento e quantidade válidos.');
+  
+    if(!productId || !variantId || !filamentId || qty <= 0){
+      alert('Selecione produto, variação, filamento e quantidade válidos.');
       return;
     }
-
-    stockProduct(productId, filamentId, qty);
+  
+    stockProduct(productId, variantId, filamentId, qty);
+  
     const qtyInput = document.getElementById('stock-qty');
     if(qtyInput) qtyInput.value = '';
   });
