@@ -569,6 +569,13 @@ tbody td{
   font-size:0.8rem;
 }
 
+.prod-edit-box{
+  background: rgba(255,255,255,0.02);
+  border-radius: 14px;
+  padding: 10px;
+  border: 1px solid rgba(148,163,184,0.12);
+}
+
 .divider{
   margin:14px 0;
   border:none;
