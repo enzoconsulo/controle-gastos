@@ -2183,7 +2183,17 @@ function buildImp3dUnitSnapshot(prod, fil, salePricePerUnit, variant = null){
     unitPackagingCost: Number(prod.pack || 0),
 
     variantId: variant?.id || 'default',
-    variantLabel: variant?.label || 'Padrão'
+    variantLabel: variant?.label || 'Padrão',
+    
+    // O filamentSnapshot PRECISA estar aqui para manter o histórico de custo e material
+    filamentSnapshot: {
+      id: fil.id,
+      color: fil.color,
+      type: fil.type,
+      price: Number(fil.price || 0),
+      initialWeight: Number(fil.initialWeight || fil.weight || 0),
+      pricePerGram
+    }
   };
 }
 
