@@ -1209,6 +1209,16 @@ function handleAddFilament(){
   updateAll();
 }
 
+/* Helper Novo: Fecha todos os painéis de produto para manter apenas 1 aberto */
+function closeAllProductPanels() {
+  // Fecha todas as caixas de edição (oculta)
+  document.querySelectorAll('.prod-edit-box').forEach(box => box.style.display = 'none');
+  // Remove todos os painéis de cálculo de lucro
+  document.querySelectorAll('[id^="imp3d-profit-preview-"]').forEach(box => box.remove());
+  // Remove todos os painéis de venda rápida
+  document.querySelectorAll('[id^="imp3d-sell-form-"]').forEach(box => box.remove());
+}
+
 /* Render produtos list */
 function renderProducts(){
   const container = document.getElementById('prod-list');
@@ -1366,12 +1376,17 @@ function renderProducts(){
     });
   });
 
+  // LÓGICA ATUALIZADA AQUI: Fecha tudo antes de abrir a edição
   container.querySelectorAll('.prod-edit-toggle').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
       const box = document.getElementById(`edit-${id}`);
-      if(box){
-        box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      const isCurrentlyOpen = box && box.style.display === 'block';
+
+      closeAllProductPanels(); // Fecha qualquer caixa do sistema
+
+      if(box && !isCurrentlyOpen){
+        box.style.display = 'block'; // Abre apenas se estava fechada
       }
     });
   });
@@ -1430,7 +1445,6 @@ function renderProducts(){
         base.label = 'Padrão';
       }
 
-      // atualiza variantes editáveis
       const variantRows = card.querySelectorAll('.variant-row');
       const variants = [];
       variantRows.forEach(row=>{
@@ -1480,12 +1494,8 @@ function renderProducts(){
       const label = (labelEl?.value || '').trim();
       const price = Number(priceEl?.value || 0);
 
-      if(!label){
-        alert('Dê um nome para a variação.');
-        return;
-      }
-      if(price <= 0){
-        alert('Preço inválido.');
+      if(!label || price <= 0){
+        alert('Dados da variação inválidos.');
         return;
       }
 
@@ -1536,10 +1546,8 @@ function renderProducts(){
   container.querySelectorAll('.prod-stock').forEach(b=>{
     b.addEventListener('click', e=>{
       const id = e.target.dataset.id;
-
       const inSubFolder = window.location.pathname.includes('/impressora3d/');
       const targetPath = inSubFolder ? 'estoque.html' : 'impressora3d/estoque.html';
-
       window.location.href = `${targetPath}?prod=${encodeURIComponent(id)}`;
     });
   });
@@ -1549,8 +1557,12 @@ function renderProducts(){
 
 function openProfitCalcPreviewForProduct(productId, anchorBtn){
   const existing = document.getElementById('imp3d-profit-preview-' + productId);
+  
+  // LÓGICA NOVA: Fecha qualquer outro painel aberto no sistema
+  closeAllProductPanels(); 
+
+  // Se ele já estava aberto, o limpador acima removeu, então apenas saímos (efeito Toggle)
   if(existing){
-    existing.remove();
     return;
   }
 
@@ -1677,7 +1689,6 @@ function openProfitCalcPreviewForProduct(productId, anchorBtn){
     profitEl.textContent = money(profit);
   }
 
-  // FIX AQUI: Agora ele puxa o preço da variação e manda a matemática atualizar na mesma hora
   variantSel.addEventListener('change', ()=>{
     syncPrice();
     recompute();
@@ -1960,7 +1971,14 @@ function openWithdrawFormForFilament(filamentId, anchorBtn) {
 
 function openSellFormForProduct(productId, anchorBtn){
   const existing = document.getElementById('imp3d-sell-form-'+productId);
-  if(existing){ existing.remove(); return; }
+  
+  // LÓGICA NOVA: Fecha qualquer outro painel aberto
+  closeAllProductPanels();
+
+  // Se já estava aberto, sai
+  if(existing){ 
+    return; 
+  }
 
   const prod = state.products.find(p=>p.id===productId);
   if(!prod) return;
