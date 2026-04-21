@@ -29,22 +29,35 @@
 
   <main class="wrap app-main imp3d-page" id="imp3d-dashboard-container">
     
+    <div class="imp3d-action-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom: 20px;">
+      <button id="btn-shopee-mp" class="action-btn" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; border:none; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <span style="font-size: 1.2rem;">💸</span> Sacar Shopee ➔ Mercado Pago
+      </button>
+      <button id="btn-store-expense" class="action-btn" style="background:linear-gradient(135deg, #ef4444, #dc2626); color:#fff; border:none; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <span style="font-size: 1.2rem;">🛍️</span> Registar Despesa da Loja
+      </button>
+    </div>
+
     <div class="box-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
       <div class="box-card glass-card" style="text-align: center; padding: 16px;">
-        <span style="font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Receita Bruta</span>
-        <div id="dash-imp-gross" style="font-size: 1.4rem; font-weight: 800; color: #fff; margin-top: 6px;">R$ 0,00</div>
+        <span style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Receita Bruta</span>
+        <div id="dash-imp-gross" style="font-size: 1.3rem; font-weight: 800; color: #fff; margin-top: 6px;">R$ 0,00</div>
       </div>
       <div class="box-card glass-card" style="text-align: center; padding: 16px;">
-        <span style="font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Lucro Líquido</span>
-        <div id="dash-imp-profit" style="font-size: 1.4rem; font-weight: 800; color: var(--accent); margin-top: 6px;">R$ 0,00</div>
+        <span style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Lucro Líquido</span>
+        <div id="dash-imp-profit" style="font-size: 1.3rem; font-weight: 800; color: var(--accent); margin-top: 6px;">R$ 0,00</div>
       </div>
       <div class="box-card glass-card" style="text-align: center; padding: 16px;">
-        <span style="font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Taxas Shopee</span>
-        <div id="dash-imp-fees" style="font-size: 1.4rem; font-weight: 800; color: var(--yellow); margin-top: 6px;">R$ 0,00</div>
+        <span style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Taxas Shopee</span>
+        <div id="dash-imp-fees" style="font-size: 1.3rem; font-weight: 800; color: var(--yellow); margin-top: 6px;">R$ 0,00</div>
       </div>
       <div class="box-card glass-card" style="text-align: center; padding: 16px;">
-        <span style="font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Custo (Mat + Perdas)</span>
-        <div id="dash-imp-mat" style="font-size: 1.4rem; font-weight: 800; color: var(--danger); margin-top: 6px;">R$ 0,00</div>
+        <span style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Perdas / Falhas</span>
+        <div id="dash-imp-losses" style="font-size: 1.3rem; font-weight: 800; color: #ef4444; margin-top: 6px;">R$ 0,00</div>
+      </div>
+      <div class="box-card glass-card panel-card-full" style="text-align: center; padding: 16px;">
+        <span style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Reinvestimento (Custos Físicos)</span>
+        <div id="dash-imp-mat" style="font-size: 1.3rem; font-weight: 800; color: #60a5fa; margin-top: 6px;">R$ 0,00</div>
       </div>
     </div>
 
@@ -59,7 +72,7 @@
 
       <div class="panel-card glass-card">
         <h3 class="card-title">Composição de Custos (Mês Atual)</h3>
-        <p class="panel-subtitle" style="font-size: 0.75rem;">Para onde o dinheiro está indo?</p>
+        <p class="panel-subtitle" style="font-size: 0.75rem;">Para onde o dinheiro está a ir?</p>
         <div class="chart-wrapper">
           <canvas id="imp3d-costs-chart"></canvas>
         </div>
@@ -67,7 +80,7 @@
       
       <div class="panel-card glass-card panel-card-full">
         <h3 class="card-title">Top 5 Produtos (Mês Atual)</h3>
-        <p class="panel-subtitle" style="font-size: 0.75rem;">Os produtos que mais geraram receita neste mês</p>
+        <p class="panel-subtitle" style="font-size: 0.75rem;">Os produtos que mais geraram receita este mês</p>
         <div class="table-wrapper" style="margin-top: 10px;">
           <table>
             <thead>
@@ -83,7 +96,6 @@
         </div>
       </div>
     </div>
-
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
