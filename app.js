@@ -205,6 +205,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(!v || v <= 0) return;
     transferShopeeToNubank(v);
   });
+
+  //Ações do Dashboard da Loja
+  const btnShopeeMp = document.getElementById('btn-shopee-mp');
+  if (btnShopeeMp) {
+    btnShopeeMp.addEventListener('click', () => {
+      const v = Number(prompt('Valor a transferir da Shopee ➔ Mercado Pago (R$):', '0'));
+      if (v > 0) transferShopeeToMercadoPago(v);
+    });
+  }
+
+  const btnStoreExpense = document.getElementById('btn-store-expense');
+  if (btnStoreExpense) {
+    btnStoreExpense.addEventListener('click', () => {
+      if(typeof openStoreExpenseForm === 'function') openStoreExpenseForm();
+    });
+  }
 });
 
 // Botão "Criar Caixa" na página de Caixas
