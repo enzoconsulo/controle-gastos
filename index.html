@@ -426,8 +426,19 @@
 
               <div class="yellow-grid imp3d-summary-grid" style="margin-top:12px">
                 <div class="y-row"><span>Recebido líquido</span><strong id="imp3d-total-received">R$ 0,00</strong></div>
-                <div class="y-row"><span>Reinvestimento obrigatório</span><strong id="imp3d-total-reinvest">R$ 0,00</strong></div>
-                <div class="y-row"><span>Lucro real</span><strong id="imp3d-total-profit">R$ 0,00</strong></div>
+                <div class="y-row"><span>(–) Reinvestimento obrig.</span><strong id="imp3d-total-reinvest">R$ 0,00</strong></div>
+                
+                <div class="y-row" style="border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 6px; margin-top: 2px;">
+                  <span>= Lucro Bruto das Vendas</span><strong id="imp3d-total-sales-profit">R$ 0,00</strong>
+                </div>
+                
+                <div class="y-row">
+                  <span style="color:var(--danger);">(–) Perdas e Prejuízos</span><strong id="imp3d-total-losses" style="color:var(--danger)">R$ 0,00</strong>
+                </div>
+                
+                <div class="y-row" style="border-top: 1px solid rgba(255,255,255,0.25); padding-top: 8px; margin-top: 4px;">
+                  <span>= Lucro Real Final</span><strong id="imp3d-total-profit">R$ 0,00</strong>
+                </div>
               </div>
             </section>
           </div>
