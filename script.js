@@ -2225,12 +2225,13 @@ function sellFromStock(stockId, qtyToSell){
   // snapshot salvo no lote, se existir
   let snapshot = stock.snapshot ? JSON.parse(JSON.stringify(stock.snapshot)) : null;
 
-  // Se o lote não tiver custo válido, pede manualmente o preço por grama
   const currentMaterialCost = Number(snapshot?.unitMaterialCost || 0);
   const currentPricePerGram = snapshot?.filamentSnapshot?.pricePerGram;
 
   let manualPricePerGram = null;
 
+  // LÓGICA CORRIGIDA: Só pede o preço manual SE o custo for zero ou não existir.
+  // Caso contrário, passa reto e faz a venda silenciosamente.
   if(!snapshot || !currentMaterialCost || currentMaterialCost <= 0){
     const defaultVal =
       (currentPricePerGram !== undefined && currentPricePerGram !== null && currentPricePerGram !== '')
@@ -2249,34 +2250,15 @@ function sellFromStock(stockId, qtyToSell){
       alert('Preço por grama inválido.');
       return;
     }
-  } else {
-    // Se quiser, ainda permite sobrescrever manualmente mesmo quando já existe custo salvo
-    const useManual = confirm('Deseja sobrescrever o custo do filamento desta venda com um preço por grama manual?');
-    if(useManual){
-      const defaultVal =
-        (currentPricePerGram !== undefined && currentPricePerGram !== null && currentPricePerGram !== '')
-          ? String(currentPricePerGram)
-          : String((Number(snapshot.unitMaterialCost || 0) / Number(prod.fil_g || 1)) || 0);
-
-      const val = prompt('Preço por grama do filamento para esta venda:', defaultVal);
-      if(val === null) return;
-
-      manualPricePerGram = Number(val || 0);
-      if(!manualPricePerGram || manualPricePerGram <= 0){
-        alert('Preço por grama inválido.');
-        return;
-      }
-    }
   }
 
-  // Se o usuário informou manualmente, recria um snapshot temporário só para esta venda
+  // Se o usuário precisou informar manualmente, recria um snapshot temporário
   if(manualPricePerGram !== null){
     snapshot = {
       salePricePerUnit: Number(snapshot?.salePricePerUnit || prod.price || 0),
       unitMaterialCost: Number(prod.fil_g || 0) * manualPricePerGram,
       unitHourlyCost: Number(prod.hours || 0) * Number(prod.energy_h || 0),
       unitPackagingCost: Number(prod.pack || 0),
-      // FIX: Preservando as variáveis para não quebrar a estrutura do histórico
       variantId: snapshot?.variantId || 'default',
       variantLabel: snapshot?.variantLabel || 'Padrão',
       filamentSnapshot: {
