@@ -221,6 +221,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(typeof openStoreExpenseForm === 'function') openStoreExpenseForm();
     });
   }
+
+  //Faz o gráfico atualizar imediatamente ao clicares no Toggle
+  const toggleAllTime = document.getElementById('dash-toggle-alltime');
+  if (toggleAllTime) {
+    toggleAllTime.addEventListener('change', () => {
+      if(typeof renderImp3dDashboard === 'function') renderImp3dDashboard();
+    });
+  }
 });
 
 // Botão "Criar Caixa" na página de Caixas
