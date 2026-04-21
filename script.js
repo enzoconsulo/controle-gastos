@@ -6,6 +6,8 @@ const STORAGE_KEY = "controleExcel_v10";
 const SHOPEE_FEE_FIXED = 4.00; // taxa fixa por unidade (R$) — ajuste se necessário
 const SHOPEE_FEE_PCT = 0.20;  // 20% => escreva 0.20
 
+const BUSINESS_ACCOUNTS = ['imp3d', 'shopee', 'mercado_pago'];
+
 const DEFAULT = {
   accounts: [
     { id: "nubank", name: "Nubank", saldo: 0, guardado: 0, credit_total: 0 },
@@ -192,15 +194,22 @@ function monthlySumsByAccount(month){
 
 function calcDerived(month){
   const sums = monthlySumsByAccount(month);
-  const total_gasto_credito = sum(Object.values(sums), x => x.gasto_credito);
+  
+  // Filtra apenas contas pessoais
+  const personalAccounts = state.accounts.filter(a => !BUSINESS_ACCOUNTS.includes(a.id));
+
+  const total_gasto_credito = sum(personalAccounts, a => sums[a.id] ? sums[a.id].gasto_credito : 0);
   const available_credit_total = Number(state.totals.credito_total || 0) - total_gasto_credito;
 
-  const total_gasto_vr = sum(Object.values(sums), x => x.gasto_vr);
+  const total_gasto_vr = sum(personalAccounts, a => sums[a.id] ? sums[a.id].gasto_vr : 0);
   const available_vr = Number(state.totals.vr_total||0) - total_gasto_vr;
-  const guardado_total = sum(state.accounts, a => a.guardado || 0);
-  const total_saldos = sum(state.accounts, a => a.saldo || 0);
-  const vrAccount = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
+
+  const guardado_total = sum(personalAccounts, a => a.guardado || 0);
+  
+  const total_saldos = sum(personalAccounts, a => a.saldo || 0);
+  const vrAccount = personalAccounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   const saldo_display = total_saldos - (vrAccount ? Number(vrAccount.saldo) : 0);
+  
   const credito_debito = available_credit_total + saldo_display;
 
   return { sumsByAccount: sums, total_gasto_credito, available_credit_total, available_vr, guardado_total, saldo_display, credito_debito };
@@ -216,7 +225,9 @@ function renderAccountsTable(){
   const month = getActiveMonth();
   const sums = monthlySumsByAccount(month);
 
-  state.accounts.forEach(a => {
+  // Renderiza Contas Pessoais primeiro
+  const personalAccs = state.accounts.filter(a => !BUSINESS_ACCOUNTS.includes(a.id));
+  personalAccs.forEach(a => {
     const s = sums[a.id] || { gasto_credito:0, gasto_vr:0, gasto_saldo:0 };
     const isCaju = a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr');
     const vrCellContent = isCaju ? money(s.gasto_vr) : '';
@@ -232,7 +243,29 @@ function renderAccountsTable(){
     tbody.appendChild(tr);
   });
 
-  // atualizar resumo conta imp3d se existir
+  // Renderiza Divisor e Contas do Negócio
+  const businessAccs = state.accounts.filter(a => BUSINESS_ACCOUNTS.includes(a.id));
+  if(businessAccs.length > 0){
+    const divTr = document.createElement('tr');
+    divTr.innerHTML = `<td colspan="5" style="background: rgba(59,130,246,0.1); text-align: center; font-size: 0.75rem; font-weight: 800; color: #60a5fa; padding: 8px; letter-spacing: 0.1em;">📦 CONTAS DO NEGÓCIO (ISOLADAS)</td>`;
+    tbody.appendChild(divTr);
+
+    businessAccs.forEach(a => {
+      const s = sums[a.id] || { gasto_credito:0, gasto_vr:0, gasto_saldo:0 };
+      const tr = document.createElement('tr');
+      tr.style.background = 'rgba(0,0,0,0.2)'; // Fundo levemente mais escuro
+      tr.innerHTML = `
+        <td style="color: var(--muted);">${a.name}</td>
+        <td style="color: var(--muted);">${money(a.saldo)}</td>
+        <td style="color: var(--muted);">${money(s.gasto_credito)}</td>
+        <td></td>
+        <td style="color: var(--muted);">${money(a.guardado || 0)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // atualizar resumo conta imp3d
   const imp3dAcc = state.accounts.find(a=>a.id==='imp3d');
   const imp3dBalanceEl = document.getElementById('imp3d-acc-balance');
   if(imp3dBalanceEl) imp3dBalanceEl.textContent = imp3dAcc ? money(imp3dAcc.saldo) : '—';
@@ -275,8 +308,11 @@ function renderGastoCreditoChart(){
   const ctx = el.getContext('2d');
   const month = getActiveMonth();
   const sums = monthlySumsByAccount(month);
-  const labels = state.accounts.map(a=>a.name);
-  const data = state.accounts.map(a => (sums[a.id] ? sums[a.id].gasto_credito : 0));
+  
+  const personalAccounts = state.accounts.filter(a => !BUSINESS_ACCOUNTS.includes(a.id));
+  const labels = personalAccounts.map(a=>a.name);
+  const data = personalAccounts.map(a => (sums[a.id] ? sums[a.id].gasto_credito : 0));
+  
   if(gastoChart) gastoChart.destroy();
   gastoChart = new Chart(ctx,{
     type:'bar',
@@ -291,12 +327,14 @@ function renderCategoryPie(){
   const ctx = el.getContext('2d');
   const month = getActiveMonth();
   const map = {};
+  
   state.expenses
-    .filter(e => billingMonthOf(e.date) === month)
+    .filter(e => billingMonthOf(e.date) === month && !BUSINESS_ACCOUNTS.includes(e.accountId))
     .forEach(e=>{
       if(e.type === 'entrada') return;
       map[e.category] = (map[e.category]||0) + Number(e.amount||0);
     });
+    
   const labels = Object.keys(map);
   const data = labels.map(k=>map[k]);
   if(categoryChart) categoryChart.destroy();
@@ -317,7 +355,7 @@ function monthlyTotalsLastN(n=6){
   for(let i=state.meta.activeOffset-(n-1); i<=state.meta.activeOffset; i++){
     const month = computeMonthFromOffset(i);
     const total = state.expenses
-      .filter(e => billingMonthOf(e.date) === month && e.type !== 'entrada')
+      .filter(e => billingMonthOf(e.date) === month && e.type !== 'entrada' && !BUSINESS_ACCOUNTS.includes(e.accountId))
       .reduce((s,x)=>s+Number(x.amount||0),0);
     arr.push({month,total});
   }
@@ -350,13 +388,13 @@ function renderMonthlyLine(){
 function getEntradasDistribution(month, includeStart){
   const map = {};
   state.expenses
-    .filter(e => billingMonthOf(e.date) === month && e.type === 'entrada')
+    .filter(e => billingMonthOf(e.date) === month && e.type === 'entrada' && !BUSINESS_ACCOUNTS.includes(e.accountId))
     .forEach(e=>{
       map[e.accountId] = (map[e.accountId]||0) + Number(e.amount||0);
     });
   if(includeStart && state.startEntries){
     state.startEntries
-      .filter(s => s.month === month)
+      .filter(s => s.month === month && !BUSINESS_ACCOUNTS.includes(s.accountId))
       .forEach(s=>{
         map[s.accountId] = (map[s.accountId]||0) + Number(s.amount||0);
       });
@@ -471,8 +509,12 @@ function renderEditableAccounts(){
   if(!c) return;
   c.innerHTML='';
   state.accounts.forEach((acc, idx)=>{
-    const card = document.createElement('div'); card.className='account-card';
-    card.innerHTML = `<h4>${acc.name}</h4>
+    const isBusiness = BUSINESS_ACCOUNTS.includes(acc.id);
+    const card = document.createElement('div'); 
+    card.className='account-card';
+    if(isBusiness) card.style.border = '1px solid rgba(59, 130, 246, 0.3)'; // Borda azul para contas da loja
+
+    card.innerHTML = `<h4>${acc.name} ${isBusiness ? '<span style="font-size:0.7rem; color:#60a5fa; float:right;">NEGÓCIO</span>' : ''}</h4>
       <div class="account-row"><label>Saldo</label><input data-acc="${idx}" data-field="saldo" type="number" step="0.01" value="${acc.saldo}" /></div>
       <div class="account-row"><label>Guardado</label><input data-acc="${idx}" data-field="guardado" type="number" step="0.01" value="${acc.guardado||0}" /></div>
       <div class="account-row"><label>Crédito</label><input data-acc="${idx}" data-field="credit_total" type="number" step="0.01" value="${acc.credit_total||0}" /></div>`;
@@ -492,10 +534,11 @@ function renderEditableAccounts(){
 
 /* investimentos: resumo + log + caixinhas (mantidos) */
 function renderInvestimentos(){
+  const personalAccounts = state.accounts.filter(a => !BUSINESS_ACCOUNTS.includes(a.id));
   const list = document.getElementById('invest-list'); 
   if(list){
     list.innerHTML='';
-    state.accounts.forEach(a=>{
+    personalAccounts.forEach(a=>{
       const item=document.createElement('div'); item.className='invest-item';
       item.innerHTML=`<div>${a.name}</div><div>${money(a.guardado||0)}</div>`;
       list.appendChild(item);
@@ -503,7 +546,7 @@ function renderInvestimentos(){
   }
 
   const totalEl = document.getElementById('guardado-total');
-  if(totalEl) totalEl.textContent = money(sum(state.accounts, x=>x.guardado||0));
+  if(totalEl) totalEl.textContent = money(sum(personalAccounts, x=>x.guardado||0));
 
   renderInvestLog();
   renderInvestBoxes();
