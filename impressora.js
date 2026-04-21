@@ -1941,16 +1941,21 @@ function renderImpStock(){
 /* render vendas - agora mostra colunas com cálculo e soma total recebido / lucro */
 function renderImpSales(){
   const tbody = document.getElementById('imp3d-sales-body');
-
-  const arr = [...state.impSales].sort((a,b)=> a.date < b.date ? 1 : -1);
+  const month = getActiveMonth();
+  
+  // FIX: Filtra os dados apenas para o MÊS ATUAL, tal como o Dashboard
+  const arr = state.impSales.filter(s => billingMonthOf(s.date) === month).sort((a,b)=> a.date < b.date ? 1 : -1);
+  const lossesArr = state.impLosses.filter(l => billingMonthOf(l.date) === month);
 
   let totalReceived = 0;
   let totalProfit = 0;
   let totalMandatoryReinvest = 0;
+  let totalLosses = 0;
+
+  lossesArr.forEach(l => totalLosses += Number(l.cost || 0));
 
   if(tbody){
     tbody.innerHTML = '';
-
     arr.forEach(s=>{
       const prod = state.products.find(p=>p.id===s.productId) || {name:s.productId};
       const fil = state.filaments.find(f=>f.id===s.filamentId) || {color:s.filamentId};
@@ -1980,12 +1985,18 @@ function renderImpSales(){
     totalMandatoryReinvest += Number(s.mandatoryReinvest || 0);
   });
 
+  // O Lucro Real da Visão Geral abate agora o valor desperdiçado em perdas/falhas!
+  const realProfit = totalProfit - totalLosses;
+
   const recEl = document.getElementById('imp3d-total-received');
   const profEl = document.getElementById('imp3d-total-profit');
   const reinvEl = document.getElementById('imp3d-total-reinvest');
 
   if(recEl) recEl.textContent = money(totalReceived);
-  if(profEl) profEl.textContent = money(totalProfit);
+  if(profEl) {
+    profEl.textContent = money(realProfit);
+    profEl.style.color = realProfit < 0 ? 'var(--danger)' : 'var(--accent)';
+  }
   if(reinvEl) reinvEl.textContent = money(totalMandatoryReinvest);
 }
 
@@ -2023,11 +2034,10 @@ function updateImp3dAccountBalances(){
 
 function renderImp3dDashboard() {
   const dashContainer = document.getElementById('imp3d-dashboard-container');
-  if (!dashContainer) return; // Só executa se estiver na página do Dashboard
+  if (!dashContainer) return; 
 
   const month = getActiveMonth();
   
-  // Filtra dados do mês ativo
   const monthSales = state.impSales.filter(s => billingMonthOf(s.date) === month);
   const monthLosses = state.impLosses.filter(l => billingMonthOf(l.date) === month);
 
@@ -2047,13 +2057,12 @@ function renderImp3dDashboard() {
     lossesCost += Number(l.cost || 0);
   });
 
-  // Lucro Real (abate as perdas do lucro bruto gerado nas vendas)
   const realProfit = profit - lossesCost;
 
-  // 1. Atualiza os Cards Superiores
   const elGross = document.getElementById('dash-imp-gross');
   const elProfit = document.getElementById('dash-imp-profit');
   const elFees = document.getElementById('dash-imp-fees');
+  const elLosses = document.getElementById('dash-imp-losses');
   const elMat = document.getElementById('dash-imp-mat');
 
   if(elGross) elGross.textContent = money(gross);
@@ -2062,9 +2071,20 @@ function renderImp3dDashboard() {
     elProfit.style.color = realProfit < 0 ? 'var(--danger)' : 'var(--accent)';
   }
   if(elFees) elFees.textContent = money(fees);
-  if(elMat) elMat.textContent = money(matCost + lossesCost);
+  if(elLosses) elLosses.textContent = money(lossesCost);
+  
+  // FIX: Distinção claríssima do valor fracionado no reinvestimento
+  if(elMat) {
+    elMat.innerHTML = `
+      ${money(matCost + hourCost + packCost)}
+      <div style="font-size:0.75rem; color:var(--muted); margin-top:8px; font-weight:normal; display:flex; justify-content:center; gap:8px; flex-wrap:wrap; text-transform:none; letter-spacing:0;">
+        <span title="Filamento" style="background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px;">🧵 ${money(matCost)}</span>
+        <span title="Energia/Hora" style="background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px;">⚡ ${money(hourCost)}</span>
+        <span title="Embalagem" style="background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px;">📦 ${money(packCost)}</span>
+      </div>
+    `;
+  }
 
-  // 2. Gráfico de Custos (Pizza)
   const ctxCosts = document.getElementById('imp3d-costs-chart');
   if (ctxCosts) {
     if(impCostsChart) impCostsChart.destroy();
@@ -2085,14 +2105,12 @@ function renderImp3dDashboard() {
     });
   }
 
-  // 3. Gráfico de Tendência (Últimos 6 meses)
   const ctxTrend = document.getElementById('imp3d-trend-chart');
   if (ctxTrend) {
     const labels = [];
     const dataGross = [];
     const dataProfit = [];
 
-    // Pega os últimos 6 meses retroativos baseados no offset ativo
     for(let i = state.meta.activeOffset - 5; i <= state.meta.activeOffset; i++){
       const m = computeMonthFromOffset(i);
       labels.push(m);
@@ -2129,7 +2147,6 @@ function renderImp3dDashboard() {
     });
   }
 
-  // 4. Ranking de Top Produtos do Mês
   const tbodyTop = document.getElementById('dash-top-products-body');
   if (tbodyTop) {
     tbodyTop.innerHTML = '';
@@ -2161,6 +2178,114 @@ function renderImp3dDashboard() {
       });
     }
   }
+}
+
+// FLUXO DE CAIXA E DESPESAS DA LOJA
+function transferShopeeToMercadoPago(amount){
+  amount = Number(amount || 0);
+  if(!amount || amount <= 0) return alert('Valor inválido para transferência.');
+  const sh = state.accounts.find(a=>a.id==='shopee');
+  const mp = state.accounts.find(a=>a.id==='mercado_pago');
+  if(!sh || !mp) return alert('Contas Shopee ou Mercado Pago não encontradas.');
+  
+  if(Number(sh.saldo || 0) < amount){
+    if(!confirm(`O Saldo Shopee (${money(sh.saldo)}) é insuficiente. Desejas permitir que fique negativo?`)) return;
+  }
+  
+  sh.saldo = Number(sh.saldo || 0) - amount;
+  mp.saldo = Number(mp.saldo || 0) + amount;
+
+  const out = { id: 'imp3d-tr-out-' + Date.now().toString(), date: todayISO(), desc:`Saque Shopee ➔ Mercado Pago`, amount, type:'saldo', accountId:'shopee', category:'transfer_shopee', method:'transferencia' };
+  const inent = { id: 'imp3d-tr-in-' + Date.now().toString(), date: todayISO(), desc:`Saque Shopee ➔ Mercado Pago`, amount, type:'entrada', accountId:'mercado_pago', category:'transfer_shopee', method:'transferencia' };
+  state.expenses.push(out);
+  state.expenses.push(inent);
+
+  saveState();
+  updateAll();
+  alert(`Sucesso! Foram transferidos ${money(amount)} da Shopee para o Mercado Pago.`);
+}
+
+function addStoreExpense(desc, amount, accId) {
+  amount = Number(amount || 0);
+  if(!amount || amount <= 0 || !desc) return alert('Valor ou descrição inválidos.');
+  const acc = state.accounts.find(a=>a.id===accId);
+  if(!acc) return alert('Conta não encontrada.');
+
+  if(Number(acc.saldo || 0) < amount){
+    if(!confirm(`O saldo da conta ${acc.name} é ${money(acc.saldo)}. A conta ficará negativa. Queres continuar?`)) return;
+  }
+
+  acc.saldo = Number(acc.saldo || 0) - amount;
+
+  const exp = {
+    id: 'imp3d-desp-' + Date.now().toString(),
+    date: todayISO(),
+    desc: `[Loja 3D] ${desc}`,
+    amount,
+    type: 'saldo',
+    accountId: accId,
+    category: 'impressora3d',
+    method: 'compra loja'
+  };
+
+  state.expenses.push(exp);
+  saveState();
+  updateAll();
+  alert(`A despesa "${desc}" no valor de ${money(amount)} foi registada com sucesso na conta ${acc.name}.`);
+}
+
+function openStoreExpenseForm() {
+  const existing = document.getElementById('imp3d-expense-modal');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'imp3d-expense-modal';
+  modal.style.position = 'fixed';
+  modal.style.inset = '0';
+  modal.style.background = 'rgba(0,0,0,0.85)';
+  modal.style.zIndex = '9999';
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.padding = '20px';
+
+  let accOptions = state.accounts.map(a => `<option value="${a.id}" ${a.id === 'mercado_pago' ? 'selected' : ''}>${a.name}</option>`).join('');
+
+  modal.innerHTML = `
+    <div class="panel-card glass-card" style="width:100%; max-width:400px; padding: 24px;">
+      <h3 class="card-title" style="font-size:1.1rem;">🛍️ Nova Despesa da Loja</h3>
+      <p class="panel-subtitle" style="font-size:0.8rem;">Acrescenta compras de filamentos, bicos, reparações, etc.</p>
+      <div class="form-grid" style="grid-template-columns:1fr; gap:14px; margin-top:16px;">
+        <div class="form-field">
+          <label>Descrição da compra</label>
+          <input type="text" id="se-desc" placeholder="Ex: Filamento PETG, Bico 0.4, Reparação...">
+        </div>
+        <div class="form-field">
+          <label>Valor (R$)</label>
+          <input type="number" step="0.01" id="se-amount" placeholder="0.00">
+        </div>
+        <div class="form-field">
+          <label>Conta que pagou</label>
+          <select id="se-acc">${accOptions}</select>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+          <button id="se-confirm" class="btn-primary">Registar Despesa</button>
+          <button id="se-cancel" class="btn ghost">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById('se-cancel').addEventListener('click', () => modal.remove());
+  document.getElementById('se-confirm').addEventListener('click', () => {
+    const desc = document.getElementById('se-desc').value.trim();
+    const amount = Number(document.getElementById('se-amount').value || 0);
+    const accId = document.getElementById('se-acc').value;
+    if(!desc || amount <= 0) return alert('Preenche uma descrição e um valor superior a zero.');
+    addStoreExpense(desc, amount, accId);
+    modal.remove();
+  });
 }
 
 /* ========================================================
