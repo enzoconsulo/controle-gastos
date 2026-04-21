@@ -46,6 +46,43 @@
       </label>
     </div>
 
+    <div style="display:flex; justify-content: flex-end; margin-bottom: 16px; align-items: center; gap: 10px;">
+      <span style="font-size: 0.85rem; color: var(--muted); font-weight: 600;">Período de Análise:</span>
+      <label class="inline-toggle" style="background: rgba(255,255,255,0.06); padding: 8px 14px; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #fff;">
+        <input type="checkbox" id="dash-toggle-alltime" style="width:16px; height:16px; accent-color: var(--accent);">
+        Mostrar Todo o Tempo
+      </label>
+    </div>
+
+    <div class="panel-grid" style="margin-bottom: 16px;">
+      <div class="panel-card glass-card">
+        <h3 class="card-title">Saldos Físicos da Loja</h3>
+        <p class="panel-subtitle" style="font-size: 0.75rem;">Onde o dinheiro está agora</p>
+        <div class="yellow-grid soft-highlight" style="margin-top:10px;">
+          <div class="y-row"><span>Shopee</span><strong id="dash-shopee-bal">R$ 0,00</strong></div>
+          <div class="y-row"><span>Mercado Pago</span><strong id="dash-mp-bal">R$ 0,00</strong></div>
+          <div class="y-row" style="opacity:0.6; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 4px; margin-top: 4px;">
+            <span>Medidor de Custo (imp3d)</span><strong id="dash-imp3d-bal">R$ 0,00</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card glass-card">
+        <h3 class="card-title">Extrato do Reinvestimento <span style="color:var(--accent); font-weight:800;">(Acumulado)</span></h3>
+        <p class="panel-subtitle" style="font-size: 0.75rem;">Controle do fundo para compras de insumos</p>
+        <div class="yellow-grid soft-highlight" style="margin-top:10px;">
+          <div class="y-row"><span>(+) Arrecadado nas Vendas</span><strong id="dash-fund-in">R$ 0,00</strong></div>
+          <div class="y-row"><span>(-) Despesas da Loja (Compras)</span><strong id="dash-fund-out" style="color:var(--danger)">R$ 0,00</strong></div>
+          <div class="y-row" style="border-top: 1px solid rgba(255,255,255,0.25); padding-top: 6px; margin-top: 4px;">
+            <span>= Saldo do Fundo</span><strong id="dash-fund-balance" style="font-size: 1.1rem;">R$ 0,00</strong>
+          </div>
+        </div>
+        <div id="dash-fund-status" style="margin-top:10px; font-size:0.8rem; text-align:center; padding:8px; border-radius:8px; background:rgba(255,255,255,0.05); line-height:1.4;">
+          —
+        </div>
+      </div>
+    </div>
+
     <div class="box-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
       <div class="box-card glass-card" style="text-align: center; padding: 16px;">
         <span style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Receita Bruta</span>
