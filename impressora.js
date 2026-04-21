@@ -2018,22 +2018,18 @@ function renderImpLosses(){
   });
 }
 
-function updateImp3dAccountBalances(){
-  const imp3dEl = document.getElementById('imp3d-acc-balance');
-  const shopeeEl = document.getElementById('shopee-acc-balance');
+function updateImp3dAccountBalances() {
+  const imp3d = state.accounts.find(a=>a.id==='imp3d');
+  const shopee = state.accounts.find(a=>a.id==='shopee');
+  const mp = state.accounts.find(a=>a.id==='mercado_pago'); // NOVO
 
-  if(!imp3dEl && !shopeeEl) return;
+  const elImp = document.getElementById('imp3d-acc-balance');
+  const elSh = document.getElementById('shopee-acc-balance');
+  const elMp = document.getElementById('mp-acc-balance'); // NOVO
 
-  const imp3dAcc = state.accounts.find(a => a.id === 'imp3d');
-  const shopeeAcc = state.accounts.find(a => a.id === 'shopee');
-
-  if(imp3dEl){
-    imp3dEl.textContent = imp3dAcc ? money(imp3dAcc.saldo || 0) : '—';
-  }
-
-  if(shopeeEl){
-    shopeeEl.textContent = shopeeAcc ? money(shopeeAcc.saldo || 0) : '—';
-  }
+  if(elImp) elImp.textContent = imp3d ? money(imp3d.saldo) : '—';
+  if(elSh) elSh.textContent = shopee ? money(shopee.saldo) : '—';
+  if(elMp) elMp.textContent = mp ? money(mp.saldo) : '—'; // NOVO
 }
 
 function renderImp3dDashboard() {
@@ -2041,6 +2037,57 @@ function renderImp3dDashboard() {
   if (!dashContainer) return; 
 
   const month = getActiveMonth();
+
+  const shopee = state.accounts.find(a=>a.id==='shopee');
+  const mp = state.accounts.find(a=>a.id==='mercado_pago');
+  const imp3d = state.accounts.find(a=>a.id==='imp3d');
+
+  const elShBal = document.getElementById('dash-shopee-bal');
+  const elMpBal = document.getElementById('dash-mp-bal');
+  const elImpBal = document.getElementById('dash-imp3d-bal');
+
+  if(elShBal) elShBal.textContent = shopee ? money(shopee.saldo) : 'R$ 0,00';
+  if(elMpBal) elMpBal.textContent = mp ? money(mp.saldo) : 'R$ 0,00';
+  if(elImpBal) elImpBal.textContent = imp3d ? money(imp3d.saldo) : 'R$ 0,00';
+
+  // Fundo de Reinvestimento (Sempre "All Time" para tracking contínuo)
+  let allTimeReinvest = 0;
+  state.impSales.forEach(s => allTimeReinvest += Number(s.mandatoryReinvest || 0));
+
+  let allTimeStoreExpenses = 0;
+  state.expenses.forEach(e => {
+    // Conta as despesas da loja criadas pelo botão vermelho de Registro de Despesa
+    if (e.id && e.id.startsWith('imp3d-desp-')) {
+       allTimeStoreExpenses += Number(e.amount || 0);
+    }
+  });
+
+  const fundBalance = allTimeReinvest - allTimeStoreExpenses;
+
+  const elFundIn = document.getElementById('dash-fund-in');
+  const elFundOut = document.getElementById('dash-fund-out');
+  const elFundBal = document.getElementById('dash-fund-balance');
+  const elFundStatus = document.getElementById('dash-fund-status');
+
+  if (elFundIn) elFundIn.textContent = money(allTimeReinvest);
+  if (elFundOut) elFundOut.textContent = money(allTimeStoreExpenses);
+  
+  if (elFundBal) {
+    elFundBal.textContent = money(fundBalance);
+    elFundBal.style.color = fundBalance < 0 ? 'var(--danger)' : 'var(--accent)';
+  }
+  
+  if (elFundStatus) {
+    if (fundBalance >= 0) {
+      elFundStatus.innerHTML = `✅ Tem <strong>${money(fundBalance)}</strong> livres do fundo guardados para comprar material.`;
+      elFundStatus.style.border = '1px solid rgba(34, 197, 94, 0.2)';
+      elFundStatus.style.color = 'var(--accent)';
+    } else {
+      elFundStatus.innerHTML = `⚠️ <strong>Fundo Esgotado!</strong> Você tirou <strong>${money(Math.abs(fundBalance))}</strong> do seu lucro (bolso) para pagar insumos.`;
+      elFundStatus.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+      elFundStatus.style.color = 'var(--danger)';
+    }
+  }
   
   // Lê o estado do novo Toggle
   const isAllTime = document.getElementById('dash-toggle-alltime')?.checked || false;
