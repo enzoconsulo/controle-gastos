@@ -1938,17 +1938,16 @@ function renderImpStock(){
                        METRICAS E DASHBOARD:
    ======================================================== */
 
-/* render vendas - agora mostra colunas com cálculo e soma total recebido / lucro */
+/* render vendas - agora mostra a matemática detalhada com as perdas na Visão Geral */
 function renderImpSales(){
   const tbody = document.getElementById('imp3d-sales-body');
   const month = getActiveMonth();
   
-  // FIX: Filtra os dados apenas para o MÊS ATUAL, tal como o Dashboard
   const arr = state.impSales.filter(s => billingMonthOf(s.date) === month).sort((a,b)=> a.date < b.date ? 1 : -1);
   const lossesArr = state.impLosses.filter(l => billingMonthOf(l.date) === month);
 
   let totalReceived = 0;
-  let totalProfit = 0;
+  let totalProfit = 0; // Lucro bruto (apenas das vendas)
   let totalMandatoryReinvest = 0;
   let totalLosses = 0;
 
@@ -1985,19 +1984,24 @@ function renderImpSales(){
     totalMandatoryReinvest += Number(s.mandatoryReinvest || 0);
   });
 
-  // O Lucro Real da Visão Geral abate agora o valor desperdiçado em perdas/falhas!
+  // O Lucro Real abate os prejuízos e perdas de material (quebrados, espaguetes, etc)
   const realProfit = totalProfit - totalLosses;
 
   const recEl = document.getElementById('imp3d-total-received');
-  const profEl = document.getElementById('imp3d-total-profit');
   const reinvEl = document.getElementById('imp3d-total-reinvest');
+  const salesProfEl = document.getElementById('imp3d-total-sales-profit');
+  const lossesEl = document.getElementById('imp3d-total-losses');
+  const profEl = document.getElementById('imp3d-total-profit');
 
   if(recEl) recEl.textContent = money(totalReceived);
+  if(reinvEl) reinvEl.textContent = money(totalMandatoryReinvest);
+  if(salesProfEl) salesProfEl.textContent = money(totalProfit);
+  if(lossesEl) lossesEl.textContent = money(totalLosses);
+  
   if(profEl) {
     profEl.textContent = money(realProfit);
     profEl.style.color = realProfit < 0 ? 'var(--danger)' : 'var(--accent)';
   }
-  if(reinvEl) reinvEl.textContent = money(totalMandatoryReinvest);
 }
 
 /* render perdas (mantido) */
