@@ -75,7 +75,6 @@ function loadState(){
         s.products.forEach(p => {
           if(p && p.energy_h === undefined) p.energy_h = 0;
           if(p && p.pack === undefined) p.pack = 0;
-          ensureProductVariants(p);
         });
       }
       if(!s.impSales) s.impSales = [];
