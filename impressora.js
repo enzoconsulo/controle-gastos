@@ -2038,12 +2038,26 @@ function renderImp3dDashboard() {
 
   const month = getActiveMonth();
   
-  const monthSales = state.impSales.filter(s => billingMonthOf(s.date) === month);
-  const monthLosses = state.impLosses.filter(l => billingMonthOf(l.date) === month);
+  // Lê o estado do novo Toggle
+  const isAllTime = document.getElementById('dash-toggle-alltime')?.checked || false;
+
+  // Atualiza os títulos no HTML dinamicamente
+  document.querySelectorAll('.dash-time-label').forEach(el => {
+    el.textContent = isAllTime ? '(Todo o Tempo)' : '(Mês Atual)';
+  });
+
+  // Filtra as Vendas e Perdas consoante o Toggle
+  let targetSales = state.impSales;
+  let targetLosses = state.impLosses;
+
+  if (!isAllTime) {
+    targetSales = targetSales.filter(s => billingMonthOf(s.date) === month);
+    targetLosses = targetLosses.filter(l => billingMonthOf(l.date) === month);
+  }
 
   let gross = 0, profit = 0, fees = 0, matCost = 0, hourCost = 0, packCost = 0;
   
-  monthSales.forEach(s => {
+  targetSales.forEach(s => {
     gross += Number(s.amountGross || 0);
     profit += Number(s.profit || 0);
     fees += Number(s.feeTotal || 0);
@@ -2053,7 +2067,7 @@ function renderImp3dDashboard() {
   });
 
   let lossesCost = 0;
-  monthLosses.forEach(l => {
+  targetLosses.forEach(l => {
     lossesCost += Number(l.cost || 0);
   });
 
@@ -2073,7 +2087,6 @@ function renderImp3dDashboard() {
   if(elFees) elFees.textContent = money(fees);
   if(elLosses) elLosses.textContent = money(lossesCost);
   
-  // FIX: Distinção claríssima do valor fracionado no reinvestimento
   if(elMat) {
     elMat.innerHTML = `
       ${money(matCost + hourCost + packCost)}
@@ -2085,6 +2098,7 @@ function renderImp3dDashboard() {
     `;
   }
 
+  // Gráfico de Custos
   const ctxCosts = document.getElementById('imp3d-costs-chart');
   if (ctxCosts) {
     if(impCostsChart) impCostsChart.destroy();
@@ -2105,6 +2119,7 @@ function renderImp3dDashboard() {
     });
   }
 
+  // Gráfico Histórico (não é afetado pelo toggle, pois é uma "linha do tempo")
   const ctxTrend = document.getElementById('imp3d-trend-chart');
   if (ctxTrend) {
     const labels = [];
@@ -2147,12 +2162,13 @@ function renderImp3dDashboard() {
     });
   }
 
+  // Tabela Ranking de Produtos
   const tbodyTop = document.getElementById('dash-top-products-body');
   if (tbodyTop) {
     tbodyTop.innerHTML = '';
     const prodStats = {};
 
-    monthSales.forEach(s => {
+    targetSales.forEach(s => {
       if(!prodStats[s.productId]) prodStats[s.productId] = { qty: 0, gross: 0, profit: 0 };
       prodStats[s.productId].qty += Number(s.qty || 0);
       prodStats[s.productId].gross += Number(s.amountGross || 0);
@@ -2162,7 +2178,7 @@ function renderImp3dDashboard() {
     const sortedIds = Object.keys(prodStats).sort((a,b) => prodStats[b].gross - prodStats[a].gross).slice(0, 5);
 
     if(sortedIds.length === 0) {
-      tbodyTop.innerHTML = `<tr><td colspan="4" class="muted" style="text-align:center;">Nenhuma venda neste mês.</td></tr>`;
+      tbodyTop.innerHTML = `<tr><td colspan="4" class="muted" style="text-align:center;">Nenhuma venda neste período.</td></tr>`;
     } else {
       sortedIds.forEach(id => {
         const pObj = state.products.find(p => p.id === id) || { name: 'Excluído/Desconhecido' };
