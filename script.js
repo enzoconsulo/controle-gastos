@@ -3378,6 +3378,159 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+/* ========================================================
+   DASHBOARD DA IMPRESSORA 3D
+   ======================================================== */
+
+// Variáveis globais para os gráficos (colocadas junto com a função para facilitar)
+let impTrendChart = null;
+let impCostsChart = null;
+
+function renderImp3dDashboard() {
+  const dashContainer = document.getElementById('imp3d-dashboard-container');
+  if (!dashContainer) return; // Só executa se estiver na página do Dashboard
+
+  const month = getActiveMonth();
+  
+  // Filtra dados do mês ativo
+  const monthSales = state.impSales.filter(s => billingMonthOf(s.date) === month);
+  const monthLosses = state.impLosses.filter(l => billingMonthOf(l.date) === month);
+
+  let gross = 0, profit = 0, fees = 0, matCost = 0, hourCost = 0, packCost = 0;
+  
+  monthSales.forEach(s => {
+    gross += Number(s.amountGross || 0);
+    profit += Number(s.profit || 0);
+    fees += Number(s.feeTotal || 0);
+    matCost += Number(s.materialCost || 0);
+    hourCost += Number(s.hourlyCost || 0);
+    packCost += Number(s.packagingCost || 0);
+  });
+
+  let lossesCost = 0;
+  monthLosses.forEach(l => {
+    lossesCost += Number(l.cost || 0);
+  });
+
+  // Lucro Real (abate as perdas do lucro bruto gerado nas vendas)
+  const realProfit = profit - lossesCost;
+
+  // 1. Atualiza os Cards Superiores
+  const elGross = document.getElementById('dash-imp-gross');
+  const elProfit = document.getElementById('dash-imp-profit');
+  const elFees = document.getElementById('dash-imp-fees');
+  const elMat = document.getElementById('dash-imp-mat');
+
+  if(elGross) elGross.textContent = money(gross);
+  if(elProfit) {
+    elProfit.textContent = money(realProfit);
+    elProfit.style.color = realProfit < 0 ? 'var(--danger)' : 'var(--accent)';
+  }
+  if(elFees) elFees.textContent = money(fees);
+  if(elMat) elMat.textContent = money(matCost + lossesCost);
+
+  // 2. Gráfico de Custos (Pizza)
+  const ctxCosts = document.getElementById('imp3d-costs-chart');
+  if (ctxCosts) {
+    if(impCostsChart) impCostsChart.destroy();
+    impCostsChart = new Chart(ctxCosts.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Material', 'Energia (Horas)', 'Embalagem', 'Taxas Shopee', 'Perdas/Falhas'],
+        datasets: [{
+          data: [matCost, hourCost, packCost, fees, lossesCost],
+          backgroundColor: ['#60a5fa', '#facc15', '#a78bfa', '#fb923c', '#ef4444'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, aspectRatio: 1.4,
+        plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 10 } } } }
+      }
+    });
+  }
+
+  // 3. Gráfico de Tendência (Últimos 6 meses)
+  const ctxTrend = document.getElementById('imp3d-trend-chart');
+  if (ctxTrend) {
+    const labels = [];
+    const dataGross = [];
+    const dataProfit = [];
+
+    // Pega os últimos 6 meses retroativos baseados no offset ativo
+    for(let i = state.meta.activeOffset - 5; i <= state.meta.activeOffset; i++){
+      const m = computeMonthFromOffset(i);
+      labels.push(m);
+
+      const mSales = state.impSales.filter(s => billingMonthOf(s.date) === m);
+      const mLosses = state.impLosses.filter(l => billingMonthOf(l.date) === m);
+
+      let mG = 0, mP = 0, mL = 0;
+      mSales.forEach(s => { mG += Number(s.amountGross||0); mP += Number(s.profit||0); });
+      mLosses.forEach(l => { mL += Number(l.cost||0); });
+
+      dataGross.push(mG);
+      dataProfit.push(mP - mL);
+    }
+
+    if(impTrendChart) impTrendChart.destroy();
+    impTrendChart = new Chart(ctxTrend.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Receita Bruta', data: dataGross, backgroundColor: '#3b82f6', borderRadius: 4 },
+          { label: 'Lucro Líquido', data: dataProfit, backgroundColor: '#22c55e', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, aspectRatio: 1.8,
+        plugins: { legend: { labels: { color: '#cbd5e1' } } },
+        scales: {
+          x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } },
+          y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(148,163,184,0.1)' } }
+        }
+      }
+    });
+  }
+
+  // 4. Ranking de Top Produtos do Mês
+  const tbodyTop = document.getElementById('dash-top-products-body');
+  if (tbodyTop) {
+    tbodyTop.innerHTML = '';
+    const prodStats = {};
+
+    monthSales.forEach(s => {
+      if(!prodStats[s.productId]) prodStats[s.productId] = { qty: 0, gross: 0, profit: 0 };
+      prodStats[s.productId].qty += Number(s.qty || 0);
+      prodStats[s.productId].gross += Number(s.amountGross || 0);
+      prodStats[s.productId].profit += Number(s.profit || 0);
+    });
+
+    const sortedIds = Object.keys(prodStats).sort((a,b) => prodStats[b].gross - prodStats[a].gross).slice(0, 5);
+
+    if(sortedIds.length === 0) {
+      tbodyTop.innerHTML = `<tr><td colspan="4" class="muted" style="text-align:center;">Nenhuma venda neste mês.</td></tr>`;
+    } else {
+      sortedIds.forEach(id => {
+        const pObj = state.products.find(p => p.id === id) || { name: 'Excluído/Desconhecido' };
+        const st = prodStats[id];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="font-weight: 600;">${pObj.name}</td>
+          <td style="text-align: center;">${st.qty}</td>
+          <td style="color: #60a5fa;">${money(st.gross)}</td>
+          <td style="color: #4ade80;">${money(st.profit)}</td>
+        `;
+        tbodyTop.appendChild(tr);
+      });
+    }
+  }
+}
+
+/* ========================================================
+   FUNÇÃO UPDATEALL ATUALIZADA
+   ======================================================== */
 function updateAll(){
   populateAccountSelects();
   renderEditableAccounts();
@@ -3400,8 +3553,12 @@ function updateAll(){
   populateImp3dStockSelects();
   updateImp3dAccountBalances();
 
+  /* Caixas e Categorias */
   populateProductBoxSelects();
   renderProductBoxes();
+
+  /* Dashboard da Impressora 3D */
+  renderImp3dDashboard(); 
 }
 
 /* ---------- FIM DO ARQUIVO ---------- */
