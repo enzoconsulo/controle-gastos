@@ -29,13 +29,21 @@
 
   <main class="wrap app-main imp3d-page" id="imp3d-dashboard-container">
     
-    <div class="imp3d-action-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom: 20px;">
+    <div class="imp3d-action-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom: 16px;">
       <button id="btn-shopee-mp" class="action-btn" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; border:none; display:flex; align-items:center; justify-content:center; gap:8px;">
         <span style="font-size: 1.2rem;">💸</span> Sacar Shopee ➔ Mercado Pago
       </button>
       <button id="btn-store-expense" class="action-btn" style="background:linear-gradient(135deg, #ef4444, #dc2626); color:#fff; border:none; display:flex; align-items:center; justify-content:center; gap:8px;">
         <span style="font-size: 1.2rem;">🛍️</span> Registar Despesa da Loja
       </button>
+    </div>
+
+    <div style="display:flex; justify-content: flex-end; margin-bottom: 16px; align-items: center; gap: 10px;">
+      <span style="font-size: 0.85rem; color: var(--muted); font-weight: 600;">Período de Análise:</span>
+      <label class="inline-toggle" style="background: rgba(255,255,255,0.06); padding: 8px 14px; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #fff;">
+        <input type="checkbox" id="dash-toggle-alltime" style="width:16px; height:16px; accent-color: var(--accent);">
+        Mostrar Todo o Tempo
+      </label>
     </div>
 
     <div class="box-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
@@ -71,7 +79,7 @@
       </div>
 
       <div class="panel-card glass-card">
-        <h3 class="card-title">Composição de Custos (Mês Atual)</h3>
+        <h3 class="card-title">Composição de Custos <span class="dash-time-label" style="color:var(--accent); font-weight:800;">(Mês Atual)</span></h3>
         <p class="panel-subtitle" style="font-size: 0.75rem;">Para onde o dinheiro está a ir?</p>
         <div class="chart-wrapper">
           <canvas id="imp3d-costs-chart"></canvas>
@@ -79,8 +87,8 @@
       </div>
       
       <div class="panel-card glass-card panel-card-full">
-        <h3 class="card-title">Top 5 Produtos (Mês Atual)</h3>
-        <p class="panel-subtitle" style="font-size: 0.75rem;">Os produtos que mais geraram receita este mês</p>
+        <h3 class="card-title">Ranking de Produtos <span class="dash-time-label" style="color:var(--accent); font-weight:800;">(Mês Atual)</span></h3>
+        <p class="panel-subtitle" style="font-size: 0.75rem;">Os produtos que mais geraram receita</p>
         <div class="table-wrapper" style="margin-top: 10px;">
           <table>
             <thead>
