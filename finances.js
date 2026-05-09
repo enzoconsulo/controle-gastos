@@ -392,87 +392,94 @@ function renderInvestLog(){
   });
 }
 
-/* caixinhas (mantidos) */
 function renderInvestBoxes(){
   const container = document.getElementById('invest-boxes');
   if(!container) return;
-  container.innerHTML='';
+  container.innerHTML = '';
 
-  if(!state.investBoxes.length){
-    const empty = document.createElement('p');
-    empty.className = 'muted';
-    empty.textContent = 'Nenhuma caixinha criada ainda. Crie uma acima para organizar seus investimentos.';
-    container.appendChild(empty);
+  if(!state.investBoxes || !state.investBoxes.length){
+    container.innerHTML = '<p class="muted">Nenhuma caixinha criada.</p>';
     return;
   }
 
-  state.investBoxes.forEach(box=>{
+  state.investBoxes.forEach(box => {
+    const acc = state.accounts.find(a => a.id === box.accountId) || {name: '?'};
     const card = document.createElement('div');
-    card.className = 'box-card';
+    card.className = 'box-card glass-card';
+    
+    // Novo layout do card com os dois botões (Guardar e Retirar)
     card.innerHTML = `
-      <div class="box-header">
-        <div>
-          <div class="box-name">${box.name}</div>
-          <div class="box-desc">${box.desc || ''}</div>
-        </div>
-        <div class="box-amount">${money(box.amount||0)}</div>
+      <div class="box-head" style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+        <h4 style="margin:0; font-size:1rem;">${box.name}</h4>
+        <span class="box-acc" style="font-size:0.75rem; color:var(--muted); background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${acc.name}</span>
       </div>
-      <div class="box-body">
-        <label>Conta</label>
-        <select class="box-account-select" data-id="${box.id}">
-          ${state.accounts.map(a=>`<option value="${a.id}" ${a.id===box.accountId?'selected':''}>${a.name}</option>`).join('')}
-        </select>
-        <label>Valor para guardar</label>
-        <div class="box-input-row">
-          <input type="number" step="0.01" class="box-amount-input" data-id="${box.id}" placeholder="R$ 0,00">
-          <button type="button" class="btn small box-save" data-id="${box.id}">Guardar</button>
-        </div>
+      ${box.desc ? `<div class="box-desc" style="font-size:0.8rem; color:var(--muted); margin-bottom:8px;">${box.desc}</div>` : ''}
+      <div class="box-amount" style="font-size:1.25rem; font-weight:700; color:var(--accent);">${money(box.amount || 0)}</div>
+      
+      <div class="box-actions" style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn small box-add" data-id="${box.id}" style="flex:1; justify-content:center;">Guardar</button>
+        <button class="btn small box-remove" data-id="${box.id}" style="flex:1; justify-content:center; background:rgba(239, 68, 68, 0.15); color:#fca5a5;">Retirar</button>
       </div>
     `;
     container.appendChild(card);
   });
 
-  container.querySelectorAll('.box-account-select').forEach(sel=>{
-    sel.addEventListener('change', e=>{
+  // AÇÃO 1: Evento de GUARDAR
+  container.querySelectorAll('.box-add').forEach(btn => {
+    btn.addEventListener('click', e => {
       const id = e.target.dataset.id;
-      const box = state.investBoxes.find(b=>b.id===id);
+      const box = state.investBoxes.find(b => b.id === id);
       if(!box) return;
-      box.accountId = e.target.value;
+      const val = Number(prompt(`Valor para GUARDAR na caixinha "${box.name}" (R$):`, '0'));
+      if(!val || val <= 0) return;
+
+      box.amount = Number(box.amount || 0) + val;
+      const acc = state.accounts.find(a => a.id === box.accountId);
+      if(acc) acc.guardado = Number(acc.guardado || 0) + val;
+
+      state.investments.push({
+        id: Date.now().toString(),
+        date: todayISO(),
+        accountId: box.accountId,
+        action: 'guardar',
+        amount: val,
+        desc: `[${box.name}] Adicionado`
+      });
+
       saveState();
       updateAll();
     });
   });
 
-  container.querySelectorAll('.box-save').forEach(btn=>{
-    btn.addEventListener('click', e=>{
+  // AÇÃO 2: Evento de RETIRAR (NOVO)
+  container.querySelectorAll('.box-remove').forEach(btn => {
+    btn.addEventListener('click', e => {
       const id = e.target.dataset.id;
-      const box = state.investBoxes.find(b=>b.id===id);
+      const box = state.investBoxes.find(b => b.id === id);
       if(!box) return;
-      const input = container.querySelector(`input.box-amount-input[data-id="${id}"]`);
-      const amount = Number(input.value || 0);
-      if(!amount || amount<=0){ alert('Valor inválido.'); return; }
-      const acc = state.accounts.find(a=>a.id===box.accountId);
-      if(!acc){ alert('Conta inválida.'); return; }
-      if(Number(acc.saldo||0) < amount){
-        if(!confirm('Saldo pode ficar negativo. Continuar?')) return;
-      }
-      acc.saldo = Number(acc.saldo||0) - amount;
-      acc.guardado = Number(acc.guardado||0) + amount;
-      box.amount = Number(box.amount||0) + amount;
+      const val = Number(prompt(`Valor para RETIRAR da caixinha "${box.name}" (R$):\n(Saldo atual: ${money(box.amount || 0)})`, '0'));
+      if(!val || val <= 0) return;
 
-      const entry = {
+      // Trava de segurança para não sacar mais do que tem
+      if(val > Number(box.amount || 0)) {
+        return alert(`Operação cancelada: O valor (R$ ${val}) é maior que o saldo da caixinha (${money(box.amount)}).`);
+      }
+
+      box.amount = Number(box.amount || 0) - val;
+      const acc = state.accounts.find(a => a.id === box.accountId);
+      if(acc) acc.guardado = Number(acc.guardado || 0) - val;
+
+      state.investments.push({
         id: Date.now().toString(),
         date: todayISO(),
         accountId: box.accountId,
-        action: 'guardar',
-        amount,
-        desc: box.name ? `[${box.name}] ${box.desc||''}` : (box.desc||'')
-      };
-      state.investments.push(entry);
+        action: 'retirar', // Isso faz o log pintar o valor de vermelho automaticamente
+        amount: val,
+        desc: `[${box.name}] Resgatado`
+      });
+
       saveState();
       updateAll();
-      input.value='';
-      alert('Valor guardado na caixinha.');
     });
   });
 }
