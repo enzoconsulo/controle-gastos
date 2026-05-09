@@ -1938,7 +1938,6 @@ function renderImpStock(){
                        METRICAS E DASHBOARD:
    ======================================================== */
 
-/* render vendas - agora mostra a matemática detalhada com as perdas na Visão Geral */
 function renderImpSales(){
   const tbody = document.getElementById('imp3d-sales-body');
   const month = getActiveMonth();
@@ -1946,11 +1945,7 @@ function renderImpSales(){
   const arr = state.impSales.filter(s => billingMonthOf(s.date) === month).sort((a,b)=> a.date < b.date ? 1 : -1);
   const lossesArr = state.impLosses.filter(l => billingMonthOf(l.date) === month);
 
-  let totalReceived = 0;
-  let totalProfit = 0; // Lucro bruto (apenas das vendas)
-  let totalMandatoryReinvest = 0;
-  let totalLosses = 0;
-
+  let totalReceived = 0, totalProfit = 0, totalMandatoryReinvest = 0, totalLosses = 0;
   lossesArr.forEach(l => totalLosses += Number(l.cost || 0));
 
   if(tbody){
@@ -1973,8 +1968,18 @@ function renderImpSales(){
         <td>${money(s.packagingCost||0)}</td>
         <td>${money(s.mandatoryReinvest||0)}</td>
         <td>${money(s.profit||0)}</td>
+        <td>
+          <button class="btn small danger imp-refund-btn" data-id="${s.id}" style="padding: 2px 8px; font-size: 0.7rem;">Estornar</button>
+        </td>
       `;
       tbody.appendChild(tr);
+    });
+
+    // Anexa evento aos botões de estorno
+    tbody.querySelectorAll('.imp-refund-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        handleImpRefund(e.target.dataset.id);
+      });
     });
   }
 
@@ -1984,9 +1989,7 @@ function renderImpSales(){
     totalMandatoryReinvest += Number(s.mandatoryReinvest || 0);
   });
 
-  // O Lucro Real abate os prejuízos e perdas de material (quebrados, espaguetes, etc)
   const realProfit = totalProfit - totalLosses;
-
   const recEl = document.getElementById('imp3d-total-received');
   const reinvEl = document.getElementById('imp3d-total-reinvest');
   const salesProfEl = document.getElementById('imp3d-total-sales-profit');
@@ -1997,7 +2000,6 @@ function renderImpSales(){
   if(reinvEl) reinvEl.textContent = money(totalMandatoryReinvest);
   if(salesProfEl) salesProfEl.textContent = money(totalProfit);
   if(lossesEl) lossesEl.textContent = money(totalLosses);
-  
   if(profEl) {
     profEl.textContent = money(realProfit);
     profEl.style.color = realProfit < 0 ? 'var(--danger)' : 'var(--accent)';
@@ -2384,4 +2386,49 @@ function imp3dClearAll(){
   state.impSales = [];
   state.impLosses = [];
   saveState(); updateAll();
+}
+
+/* Função para desfazer venda (Reembolso pro cliente = Prejuízo total) */
+function handleImpRefund(saleId) {
+  if (!confirm('Deseja realmente processar o REEMBOLSO desta venda?\n\n- O valor recebido será retirado da sua conta (Shopee/MP).\n- A entrada e o lucro serão anulados.\n- O custo total da peça (Material + Hora + Embalagem) será lançado como PREJUÍZO.')) return;
+
+  const saleIdx = state.impSales.findIndex(s => s.id === saleId);
+  if (saleIdx === -1) return;
+  const sale = state.impSales[saleIdx];
+
+  // 1. Retira o dinheiro líquido recebido da sua conta (Shopee ou Mercado Pago)
+  const accSale = state.accounts.find(a => a.id === sale.accountId);
+  if (accSale) {
+    accSale.saldo = Number(accSale.saldo || 0) - Number(sale.netReceived || 0);
+  }
+
+  // 2. Limpa SOMENTE os logs de entrada de dinheiro e taxa da plataforma
+  // Os custos (imp3d-mat, imp3d-hour, imp3d-pack) CONTINUAM no sistema, pois o dinheiro já foi gasto e perdido.
+  const idsToRemove = [
+    `imp3d-sale-${sale.id}`,
+    `imp3d-shfee-${sale.id}`,
+    `imp3d-fee-${sale.id}`
+  ];
+  state.expenses = state.expenses.filter(e => !idsToRemove.includes(e.id));
+
+  // 3. Pega todo o custo operacional da peça e lança nas Perdas
+  const totalCost = Number(sale.materialCost || 0) + Number(sale.hourlyCost || 0) + Number(sale.packagingCost || 0);
+  const prodName = state.products.find(p => p.id === sale.productId)?.name || 'Produto Reembolsado';
+  
+  state.impLosses.push({
+    id: 'loss-refund-' + Date.now().toString(),
+    date: todayISO(),
+    filamentId: sale.filamentId,
+    grams: 0, // Como já temos o custo exato da venda original, não precisamos calcular por peso
+    cost: totalCost,
+    reason: `Reembolso / Devolução: ${prodName}`,
+    mode: 'perda'
+  });
+
+  // 4. Exclui a venda do histórico de receitas
+  state.impSales.splice(saleIdx, 1);
+
+  saveState();
+  updateAll();
+  alert('Reembolso concluído. A venda foi anulada e os custos da peça foram movidos para o seu quadro de Perdas/Prejuízos.');
 }
