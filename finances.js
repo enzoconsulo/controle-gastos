@@ -84,13 +84,15 @@ function calcDerived(month){
   const available_credit_total = Number(state.totals.credito_total || 0) - total_gasto_credito;
 
   const total_gasto_vr = sum(personalAccounts, a => sums[a.id] ? sums[a.id].gasto_vr : 0);
-  const available_vr = Number(state.totals.vr_total||0) - total_gasto_vr;
 
   const guardado_total = sum(personalAccounts, a => a.guardado || 0);
   
   const total_saldos = sum(personalAccounts, a => a.saldo || 0);
   const vrAccount = personalAccounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   const saldo_display = total_saldos - (vrAccount ? Number(vrAccount.saldo) : 0);
+  
+  // O "VR (Disponível)" agora mostra exatamente o saldo acumulado e real da conta Caju
+  const available_vr = vrAccount ? Number(vrAccount.saldo || 0) : 0;
   
   const credito_debito = available_credit_total + saldo_display;
 
@@ -699,7 +701,7 @@ function handleExpenseSubmit(e){
   activateTab('dashboard');
 }
 
-/* início do mês (mantido) */
+/* início do mês (mantido e melhorado para acumular VR) */
 function applySalary(){
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
   const entrada = Number(document.getElementById('inicio-entrada-total').value || 0);
@@ -734,14 +736,34 @@ function applySalary(){
         return;
       }
     } else {
-      state.totals.vr_total = vr;
-      caju.saldo = Number(vr || 0); // sobrescreve o saldo do Caju com o valor do input
+      // ACUMULA NO SALDO FÍSICO DO CAJU (ao invés de sobrescrever)
+      caju.saldo = Number(caju.saldo || 0) + vr; 
+
+      // REGISTRA A RECARGA NO LOG PARA TRANSPARÊNCIA
+      if(!Array.isArray(state.expenses)) state.expenses = [];
+      state.expenses.push({
+        id: 'vr-in-' + Date.now().toString(),
+        date: todayISO(),
+        desc: `Recarga Benefício (Mês ${currentMonth})`,
+        amount: vr,
+        type: 'entrada',
+        accountId: caju.id,
+        category: 'outros',
+        method: 'benefício'
+      });
     }
   }
 
   saveState();
   updateAll();
-  alert(`Entrada aplicada: ${money(entrada)}\nVR (Caju) definido: ${money(vr)}`);
+  
+  // Limpa os campos visuais de Início do mês
+  const vrInput = document.getElementById('inicio-vr-total');
+  if(vrInput) vrInput.value = '';
+  const entInput = document.getElementById('inicio-entrada-total');
+  if(entInput) entInput.value = '';
+  
+  alert(`Entrada aplicada: ${money(entrada)}\nVR (Caju) recarregado com: ${money(vr)}`);
 }
 
 /* applyCard - fecha fatura anterior e atualiza crédito global (mantido) */
