@@ -111,85 +111,52 @@ function renderYellow(){
   if(elCd) elCd.textContent = money(d.credito_debito);
 }
 
-/* selects & editable */
+/* Preenche os Selects de Contas e injeta os filtros inteligentes no Log */
 function populateAccountSelects(){
-  const sel = document.getElementById('exp-account');
-  const selTransfer = document.getElementById('exp-transfer-account');
-  const selLog = document.getElementById('log-account-filter');
-  const selInvest = document.getElementById('invest-account');
-  const boxSel = document.getElementById('box-account');
-
-  if(sel) sel.innerHTML='';
-  if(selTransfer) selTransfer.innerHTML='';
-  if(selLog) selLog.innerHTML='<option value="all">Todas</option>';
-  if(selInvest) selInvest.innerHTML='';
-  if(boxSel) boxSel.innerHTML='';
-
-  state.accounts.forEach(a=>{
-    if(sel){
-      const o=document.createElement('option');
-      o.value=a.id;
-      o.textContent=a.name;
-      sel.appendChild(o);
-    }
-
-    if(selTransfer){
-      const oT=document.createElement('option');
-      oT.value=a.id;
-      oT.textContent=a.name;
-      selTransfer.appendChild(oT);
-    }
-
-    if(selLog){
-      const o2=document.createElement('option');
-      o2.value=a.id;
-      o2.textContent=a.name;
-      selLog.appendChild(o2);
-    }
-
-    if(selInvest){
-      const o3=document.createElement('option');
-      o3.value=a.id;
-      o3.textContent=a.name;
-      selInvest.appendChild(o3);
-    }
-
-    if(boxSel){
-      const o4=document.createElement('option');
-      o4.value=a.id;
-      o4.textContent=a.name;
-      boxSel.appendChild(o4);
-    }
+  const expAcc = document.getElementById('exp-account');
+  const expTransAcc = document.getElementById('exp-transfer-account');
+  const logAcc = document.getElementById('log-account-filter');
+  const boxAcc = document.getElementById('box-account');
+  
+  let opts = '';
+  state.accounts.forEach(a => {
+    opts += `<option value="${a.id}">${a.name}</option>`;
   });
-
-  const inicioCredits = document.getElementById('inicio-credits');
-  if(inicioCredits){
-    inicioCredits.innerHTML = '';
-    state.accounts.forEach((a, idx) => {
-      const card = document.createElement('div');
-      card.className = 'account-card';
-      card.innerHTML = `<h4>${a.name}</h4>
-        <div class="account-row"><label>Crédito</label><input data-acc="${idx}" data-field="credit_total" type="number" step="0.01" value="${a.credit_total||0}" /></div>`;
-      inicioCredits.appendChild(card);
-    });
-
-    inicioCredits.querySelectorAll('input').forEach(inp=>{
-      inp.addEventListener('input', e=>{
-        const idx = Number(e.target.dataset.acc);
-        const field = e.target.dataset.field;
-        state.accounts[idx][field] = Number(e.target.value || 0);
-        saveState();
-        updateAll();
-      });
-    });
+  
+  if(expAcc) {
+    const curr = expAcc.value;
+    expAcc.innerHTML = opts;
+    if(curr) expAcc.value = curr;
   }
-
-  const vrInput = document.getElementById('inicio-vr-total');
-  const entInput = document.getElementById('inicio-entrada-total');
-  const credInput = document.getElementById('inicio-credit-global');
-  if(vrInput) vrInput.value = state.totals.vr_total || 0;
-  if(entInput) entInput.value = state.totals.entrada || 0;
-  if(credInput) credInput.value = state.totals.credito_total || 0;
+  if(expTransAcc) {
+    const curr = expTransAcc.value;
+    expTransAcc.innerHTML = opts;
+    if(curr) expTransAcc.value = curr;
+  }
+  if(boxAcc) {
+    const curr = boxAcc.value;
+    boxAcc.innerHTML = opts;
+    if(curr) boxAcc.value = curr;
+  }
+  
+  if(logAcc){
+    // Se for o primeiro carregamento (onde o HTML ainda tem a tag fixa 'all'), forçamos para 'personal'
+    let currentVal = logAcc.value;
+    if (currentVal === 'all' && logAcc.options.length === 1) {
+      currentVal = 'personal';
+    }
+    
+    logAcc.innerHTML = `
+      <option value="personal">👤 Apenas Pessoal</option>
+      <option value="business">📦 Apenas Loja 3D</option>
+      <option value="all">🌐 Todas as contas</option>
+      <optgroup label="Contas Específicas">
+        ${opts}
+      </optgroup>
+    `;
+    
+    logAcc.value = currentVal;
+  }
 }
 
 function renderEditableAccounts(){
@@ -513,40 +480,77 @@ function handleCreateBox(){
   updateAll();
 }
 
-/* log (mantido) */
+/* Renderiza a tabela de Logs respeitando a separação Pessoal vs Loja */
 function renderLogTable(){
-  const tbody = document.getElementById('log-body'); 
+  const tbody = document.getElementById('log-body');
   if(!tbody) return;
-  tbody.innerHTML='';
-  const accountFilter = document.getElementById('log-account-filter').value;
-  const onlyMonth = document.getElementById('log-show-only-month').checked;
+  tbody.innerHTML = '';
+  
+  const filterAcc = document.getElementById('log-account-filter')?.value || 'personal';
+  const onlyMonth = document.getElementById('log-show-only-month')?.checked || false;
   const month = getActiveMonth();
-  let arr = state.expenses.slice();
-  if(onlyMonth) arr = arr.filter(e => billingMonthOf(e.date) === month);
-  if(accountFilter !== 'all') arr = arr.filter(e => e.accountId === accountFilter);
+
+  let arr = [...state.expenses];
+
+  // 1. Filtro de Mês
+  if(onlyMonth){
+    arr = arr.filter(e => billingMonthOf(e.date) === month);
+  }
+
+  // 2. Filtro de Pessoal vs Loja
+  if (filterAcc === 'personal') {
+    // Oculta Imp3d, Shopee e Mercado Pago
+    arr = arr.filter(e => !BUSINESS_ACCOUNTS.includes(e.accountId));
+  } else if (filterAcc === 'business') {
+    // Mostra APENAS Imp3d, Shopee e Mercado Pago
+    arr = arr.filter(e => BUSINESS_ACCOUNTS.includes(e.accountId));
+  } else if (filterAcc !== 'all') {
+    // Mostra apenas uma conta específica, se selecionada
+    arr = arr.filter(e => e.accountId === filterAcc);
+  }
+
   arr.sort((a,b)=> a.date < b.date ? 1 : -1);
-  arr.forEach(exp=>{
-    const acc = state.accounts.find(a=>a.id===exp.accountId);
-    const destAcc = state.accounts.find(a=>a.id===exp.transferToAccountId);
+
+  arr.forEach(e=>{
+    const acc = state.accounts.find(x=>x.id===e.accountId) || {name:'?'};
+    const isBusiness = BUSINESS_ACCOUNTS.includes(e.accountId);
+    const tr = document.createElement('tr');
     
-    let contaTexto = acc ? acc.name : exp.accountId;
-    if(exp.type === 'transferencia' && destAcc){
-      contaTexto = `${contaTexto} → ${destAcc.name}`;
+    // Deixa as linhas da loja com um fundo azulado escuro caso utilizes a visão "Todas as contas"
+    if (filterAcc === 'all' && isBusiness) {
+      tr.style.background = 'rgba(59, 130, 246, 0.05)';
     }
+
+    let valStr = money(e.amount);
+    if(e.type==='entrada' || e.type==='entrada_vr') valStr = `<span style="color:var(--accent)">+${valStr}</span>`;
     
-    const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${exp.date}</td><td>${exp.desc||''}</td><td>${contaTexto}</td><td>${exp.type}</td><td>${exp.category||''}</td><td>${money(exp.amount)}</td><td>${exp.method||''}</td><td><button data-id="${exp.id}" class="btn small del">Excluir</button></td>`;
+    // Melhoria visual: Mostra a conta de destino nas transferências (Ex: Mercado Pago ➔ Nubank)
+    let destStr = '';
+    if(e.type === 'transferencia' && e.transferToAccountId) {
+       const destAcc = state.accounts.find(x => x.id === e.transferToAccountId) || {name: '?'};
+       destStr = ` <span style="color:var(--muted)">➔ ${destAcc.name}</span>`;
+    }
+
+    tr.innerHTML = `
+      <td>${e.date}</td>
+      <td>${e.desc}</td>
+      <td>${acc.name}${destStr}</td>
+      <td>${e.type}</td>
+      <td>${e.category}</td>
+      <td>${valStr}</td>
+      <td>${e.method||''}</td>
+      <td><button class="btn small danger del-log" data-id="${e.id}">Excluir</button></td>
+    `;
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll('button.del').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const id = e.target.dataset.id;
-      if(!confirm('Excluir esse lançamento?')) return;
-      const exp = state.expenses.find(x=>x.id===id);
-      if(exp) applyExpenseReverse(exp);
-      state.expenses = state.expenses.filter(x=>x.id!==id);
-      saveState(); updateAll(); renderLogTable();
+  tbody.querySelectorAll('.del-log').forEach(btn=>{
+    btn.addEventListener('click', ev=>{
+      const id = ev.target.dataset.id;
+      if(!confirm('Excluir este lançamento?')) return;
+      applyExpenseReverse(id);
+      state.expenses = state.expenses.filter(x=>x.id !== id);
+      saveState(); updateAll();
     });
   });
 }
