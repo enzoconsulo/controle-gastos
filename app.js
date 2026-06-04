@@ -288,3 +288,120 @@ function updateAll(){
   /* Dashboard da Impressora 3D */
   renderImp3dDashboard(); 
 }
+
+/* ========================================================
+   INTEGRAÇÃO APPLE PAY (SUPABASE API)
+   ======================================================== */
+const SUPABASE_URL = "https://vrtbzubfmjmbyofksnzs.supabase.co";
+
+async function syncApplePayDireto() {
+  let SUPABASE_KEY = localStorage.getItem("secretSupaKey");
+  
+  // Pede a senha na primeira vez e esconde no navegador
+  if (!SUPABASE_KEY) {
+    SUPABASE_KEY = prompt("🔒 Segurança: Insira a Chave (Publishable/Anon) do Supabase para puxar os gastos:");
+    if (SUPABASE_KEY) {
+      localStorage.setItem("secretSupaKey", SUPABASE_KEY.trim());
+    } else {
+      return; 
+    }
+  }
+
+  const HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json"
+  };
+
+  try {
+    // 1. Busca os gastos pendentes na nuvem (GET)
+    const resBusca = await fetch(`${SUPABASE_URL}/rest/v1/pendentes?select=*`, {
+      method: "GET",
+      headers: HEADERS
+    });
+    
+    // Se a chave estiver errada, apaga a memória
+    if (!resBusca.ok) {
+        if(resBusca.status === 401 || resBusca.status === 403) {
+            alert("❌ Chave do Supabase inválida. Recarregue a página e tente novamente.");
+            localStorage.removeItem("secretSupaKey");
+        }
+        return;
+    }
+
+    const pendentes = await resBusca.json();
+
+    if (pendentes && pendentes.length > 0) {
+      let idsParaApagar = [];
+      let importados = 0;
+      
+      // 2. Processa cada gasto
+      pendentes.forEach(exp => {
+         // Cria um ID único para evitar duplicar se rodar duas vezes rápido
+         const uniqueId = `supa-${exp.id}`;
+         const exists = state.expenses.find(e => e.id === uniqueId); 
+         
+         if (!exists) {
+            // Limpa formatação caso o iPhone envie como "R$ 15,90"
+            const limpo = String(exp.valor).replace(/[^\d,-]/g, '').replace(',', '.');
+            const amountNumber = parseFloat(limpo) || 0;
+
+            // Lógica inteligente para definir a conta e categoria baseada no cartão
+            let contaDestino = "nubank"; // Cartão padrão
+            let tipoGasto = "credito";
+            let categoriaGasto = "outros";
+            
+            // Verifica se o nome do cartão enviado pelo iPhone tem "Caju", "VR", "Inter", etc.
+            const nomeCartao = (exp.cartao || "").toLowerCase();
+            
+            if (nomeCartao.includes("caju") || nomeCartao.includes("vr")) {
+                contaDestino = "caju"; 
+                tipoGasto = "vr"; // A sua função nativa já desconta o type='vr' do saldo do Caju
+                categoriaGasto = "alimentacao"; 
+            } else if (nomeCartao.includes("inter")) {
+                contaDestino = "inter";
+            }
+
+            const novaDespesa = {
+              id: uniqueId,
+              date: exp.date ? exp.date.substring(0,10) : new Date().toISOString().slice(0,10),
+              desc: exp.estabelecimento || "Apple Pay",
+              amount: amountNumber,
+              type: tipoGasto, 
+              accountId: contaDestino, 
+              method: exp.cartao || "Apple Pay",
+              category: categoriaGasto 
+            };
+
+            // Aplica os efeitos na conta (abate saldo/crédito)
+            if (typeof applyExpenseEffects === 'function') applyExpenseEffects(novaDespesa);
+            state.expenses.push(novaDespesa);
+            importados++;
+         }
+         idsParaApagar.push(exp.id); 
+      });
+      
+      if(importados > 0) {
+          saveState(); 
+          updateAll(); 
+      }
+
+      // 3. Manda apagar da nuvem o que já foi lido (DELETE)
+      if (idsParaApagar.length > 0) {
+        const idsFormatados = idsParaApagar.join(',');
+        await fetch(`${SUPABASE_URL}/rest/v1/pendentes?id=in.(${idsFormatados})`, {
+          method: "DELETE",
+          headers: HEADERS
+        });
+        if(importados > 0) alert(`💸 Sincronizado! ${importados} despesa(s) do Apple Pay importada(s).`);
+      }
+    }
+  } catch (error) {
+    console.error("Erro na sincronização:", error);
+  }
+}
+
+// Executa automaticamente toda vez que a tela principal terminar de carregar
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(syncApplePayDireto, 1000); 
+});
