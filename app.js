@@ -445,3 +445,38 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(syncApplePayDireto, 1000); 
 });
+
+/* ========================================================
+   BOTÕES DE CONTROLE DO SUPABASE (SINC E CHAVE)
+   ======================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Botão de Trocar a Chave
+    const btnChangeKey = document.getElementById('btn-change-supa-key');
+    if (btnChangeKey) {
+        btnChangeKey.addEventListener('click', () => {
+            const currentKey = localStorage.getItem("secretSupaKey") || "";
+            const novaChave = prompt("🔑 Insira a nova Chave (Publishable/Anon) do Supabase:\n\n(Se quiser apagar a chave atual, deixe em branco e dê OK)", currentKey);
+            
+            if (novaChave !== null) { 
+                if (novaChave.trim() !== "") {
+                    localStorage.setItem("secretSupaKey", novaChave.trim());
+                    alert("✅ Chave atualizada com sucesso!");
+                } else {
+                    if (confirm("Você deixou o campo em branco. Tem certeza que deseja apagar a chave salva?")) {
+                        localStorage.removeItem("secretSupaKey");
+                        alert("🗑️ Chave apagada com sucesso!");
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Botão de Sincronizar Wallet Manualmente
+    const btnSyncWallet = document.getElementById('btn-sync-wallet');
+    if (btnSyncWallet) {
+        btnSyncWallet.addEventListener('click', () => {
+            // Como a função já avisa na tela quantos importou, é só chamá-la direto
+            syncApplePayDireto(); 
+        });
+    }
+});
