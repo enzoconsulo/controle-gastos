@@ -54,11 +54,30 @@ async function syncApplePayDireto() {
             const limpo = String(exp.valor).replace(/[^\d,-]/g, '').replace(',', '.');
             const amountNumber = parseFloat(limpo) || 0;
 
+            // Pega o nome do cartão e do estabelecimento em minúsculo
             const nomeCartao = (exp.cartao || "").toLowerCase();
+            const nomeLugar = (exp.estabelecimento || "").toLowerCase();
+
             let contaDestino = "nubank"; 
             let tipoGasto = "credito";
             let categoriaGasto = "outros";
             
+            // ==========================================
+            // 🧠 1. ROTEADOR DE CATEGORIAS (Pelo arquivo externo)
+            // ==========================================
+            // Varre a variável global DICT_CATEGORIAS que foi importada no index.html
+            if (typeof DICT_CATEGORIAS !== "undefined") {
+                for (const [cat, keywords] of Object.entries(DICT_CATEGORIAS)) {
+                    if (keywords.some(kw => nomeLugar.includes(kw))) {
+                        categoriaGasto = cat;
+                        break;
+                    }
+                }
+            }
+
+            // ==========================================
+            // 🧠 2. ROTEADOR DE CARTÕES / CONTAS
+            // ==========================================
             if (nomeCartao.includes("sicoob")) {
                 contaDestino = findAccId("sicoob") || "sicoob";
             } else if (nomeCartao.includes("itau") || nomeCartao.includes("itaú")) {
@@ -70,7 +89,7 @@ async function syncApplePayDireto() {
             } else if (nomeCartao.includes("caju") || nomeCartao.includes("vr")) {
                 contaDestino = "caju"; 
                 tipoGasto = "vr"; 
-                categoriaGasto = "alimentacao";
+                categoriaGasto = "alimentacao"; // Se for VR, força ser alimentação
             }
 
             const novaDespesa = {
