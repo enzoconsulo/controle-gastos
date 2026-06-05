@@ -187,3 +187,195 @@
 
   document.addEventListener("DOMContentLoaded", () => setTimeout(mountUI, 200));
 })();
+
+/* ========================================================
+   INTEGRAÇÃO APPLE PAY (SUPABASE API)
+   ======================================================== */
+const SUPABASE_URL = "https://vrtbzubfmjmbyofksnzs.supabase.co";
+
+async function syncApplePayDireto() {
+  let SUPABASE_KEY = localStorage.getItem("secretSupaKey");
+  
+  // Pede a senha na primeira vez e esconde no navegador
+  if (!SUPABASE_KEY) {
+    SUPABASE_KEY = prompt("🔒 Segurança: Insira a Chave (Publishable/Anon) do Supabase para puxar os gastos:");
+    if (SUPABASE_KEY) {
+      localStorage.setItem("secretSupaKey", SUPABASE_KEY.trim());
+    } else {
+      return; 
+    }
+  }
+
+  const HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json"
+  };
+
+  try {
+    // 1. Busca os gastos pendentes na nuvem (GET)
+    const resBusca = await fetch(`${SUPABASE_URL}/rest/v1/pendentes?select=*`, {
+      method: "GET",
+      headers: HEADERS
+    });
+    
+    // Se a chave estiver errada, apaga a memória
+    if (!resBusca.ok) {
+        if(resBusca.status === 401 || resBusca.status === 403) {
+            alert("❌ Chave do Supabase inválida. Recarregue a página e tente novamente.");
+            localStorage.removeItem("secretSupaKey");
+        }
+        return;
+    }
+/* ========================================================
+   BOTÃO PARA TROCAR A CHAVE DO SUPABASE
+   ======================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+    const btnChangeKey = document.getElementById('btn-change-supa-key');
+    
+    if (btnChangeKey) {
+        btnChangeKey.addEventListener('click', () => {
+            const currentKey = localStorage.getItem("secretSupaKey") || "";
+            const novaChave = prompt("🔑 Insira a nova Chave (Publishable/Anon) do Supabase:\n\n(Se quiser apagar a chave atual, deixe em branco e dê OK)", currentKey);
+            
+            if (novaChave !== null) { // null significa que o usuário clicou em "Cancelar"
+                if (novaChave.trim() !== "") {
+                    localStorage.setItem("secretSupaKey", novaChave.trim());
+                    alert("✅ Chave atualizada com sucesso!");
+                } else {
+                    if (confirm("Você deixou o campo em branco. Tem certeza que deseja apagar a chave salva?")) {
+                        localStorage.removeItem("secretSupaKey");
+                        alert("🗑️ Chave apagada com sucesso!");
+                    }
+                }
+            }
+        });
+    }
+});
+    const pendentes = await resBusca.json();
+
+    if (pendentes && pendentes.length > 0) {
+      let idsParaApagar = [];
+      let importados = 0;
+      
+      // Função auxiliar para achar a conta dinamicamente pelos IDs reais do estado
+      const findAccId = (keyword) => {
+          const acc = state.accounts.find(a => a.name.toLowerCase().includes(keyword) || a.id === keyword);
+          return acc ? acc.id : null;
+      };
+      
+      // 2. Processa cada gasto
+      pendentes.forEach(exp => {
+         // Cria um ID único para evitar duplicar se rodar duas vezes rápido
+         const uniqueId = `supa-${exp.id}`;
+         const exists = state.expenses.find(e => e.id === uniqueId); 
+         
+         if (!exists) {
+            // Limpa formatação caso o iPhone envie como "R$ 15,90"
+            const limpo = String(exp.valor).replace(/[^\d,-]/g, '').replace(',', '.');
+            const amountNumber = parseFloat(limpo) || 0;
+
+            // ==========================================
+            // 🧠 ROTEADOR INTELIGENTE DE CARTÕES
+            // Alinhado perfeitamente com os IDs do seu state.js
+            // ==========================================
+            const nomeCartao = (exp.cartao || "").toLowerCase();
+            
+            // Fallback padrão se não reconhecer o cartão
+            let contaDestino = "nubank"; 
+            let tipoGasto = "credito";
+            let categoriaGasto = "outros";
+            
+            if (nomeCartao.includes("sicoob")) {
+                contaDestino = findAccId("sicoob") || "sicoob";
+            } else if (nomeCartao.includes("itau") || nomeCartao.includes("itaú")) {
+                contaDestino = findAccId("itau") || "itau";
+            } else if (nomeCartao.includes("mercado") || nomeCartao.includes("mp") || nomeCartao.includes("pago")) {
+                contaDestino = "mercado_pago";
+            } else if (nomeCartao.includes("nubank")) {
+                contaDestino = "nubank";
+            } else if (nomeCartao.includes("caju") || nomeCartao.includes("vr")) {
+                contaDestino = "caju"; 
+                tipoGasto = "vr"; 
+                categoriaGasto = "alimentacao";
+            }
+
+            // Cria o objeto exato que o sistema processa
+            const novaDespesa = {
+              id: uniqueId,
+              date: exp.date ? exp.date.substring(0,10) : new Date().toISOString().slice(0,10),
+              desc: exp.estabelecimento || "Apple Pay",
+              amount: amountNumber,
+              type: tipoGasto, 
+              accountId: contaDestino,
+              method: exp.cartao || "Apple Pay", 
+              category: categoriaGasto 
+            };
+
+            // Aplica os efeitos na conta (abate saldo/crédito)
+            if (typeof applyExpenseEffects === 'function') applyExpenseEffects(novaDespesa);
+            state.expenses.push(novaDespesa);
+            importados++;
+         }
+         idsParaApagar.push(exp.id); 
+      });
+      
+      if(importados > 0) {
+          saveState(); 
+          updateAll(); 
+      }
+
+      // 3. Manda apagar da nuvem o que já foi lido (DELETE)
+      if (idsParaApagar.length > 0) {
+        const idsFormatados = idsParaApagar.join(',');
+        await fetch(`${SUPABASE_URL}/rest/v1/pendentes?id=in.(${idsFormatados})`, {
+          method: "DELETE",
+          headers: HEADERS
+        });
+        if(importados > 0) alert(`💸 Sincronizado! ${importados} despesa(s) do Apple Pay importada(s).`);
+      }
+    }
+  } catch (error) {
+    console.error("Erro na sincronização:", error);
+  }
+}
+
+// Executa automaticamente toda vez que a tela principal terminar de carregar
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(syncApplePayDireto, 1000); 
+});
+
+/* ========================================================
+   BOTÕES DE CONTROLE DO SUPABASE (SINC E CHAVE)
+   ======================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Botão de Trocar a Chave
+    const btnChangeKey = document.getElementById('btn-change-supa-key');
+    if (btnChangeKey) {
+        btnChangeKey.addEventListener('click', () => {
+            const currentKey = localStorage.getItem("secretSupaKey") || "";
+            const novaChave = prompt("🔑 Insira a nova Chave (Publishable/Anon) do Supabase:\n\n(Se quiser apagar a chave atual, deixe em branco e dê OK)", currentKey);
+            
+            if (novaChave !== null) { 
+                if (novaChave.trim() !== "") {
+                    localStorage.setItem("secretSupaKey", novaChave.trim());
+                    alert("✅ Chave atualizada com sucesso!");
+                } else {
+                    if (confirm("Você deixou o campo em branco. Tem certeza que deseja apagar a chave salva?")) {
+                        localStorage.removeItem("secretSupaKey");
+                        alert("🗑️ Chave apagada com sucesso!");
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Botão de Sincronizar Wallet Manualmente
+    const btnSyncWallet = document.getElementById('btn-sync-wallet');
+    if (btnSyncWallet) {
+        btnSyncWallet.addEventListener('click', () => {
+            // Como a função já avisa na tela quantos importou, é só chamá-la direto
+            syncApplePayDireto(); 
+        });
+    }
+});
