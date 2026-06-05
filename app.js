@@ -328,7 +328,31 @@ async function syncApplePayDireto() {
         }
         return;
     }
-
+/* ========================================================
+   BOTÃO PARA TROCAR A CHAVE DO SUPABASE
+   ======================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+    const btnChangeKey = document.getElementById('btn-change-supa-key');
+    
+    if (btnChangeKey) {
+        btnChangeKey.addEventListener('click', () => {
+            const currentKey = localStorage.getItem("secretSupaKey") || "";
+            const novaChave = prompt("🔑 Insira a nova Chave (Publishable/Anon) do Supabase:\n\n(Se quiser apagar a chave atual, deixe em branco e dê OK)", currentKey);
+            
+            if (novaChave !== null) { // null significa que o usuário clicou em "Cancelar"
+                if (novaChave.trim() !== "") {
+                    localStorage.setItem("secretSupaKey", novaChave.trim());
+                    alert("✅ Chave atualizada com sucesso!");
+                } else {
+                    if (confirm("Você deixou o campo em branco. Tem certeza que deseja apagar a chave salva?")) {
+                        localStorage.removeItem("secretSupaKey");
+                        alert("🗑️ Chave apagada com sucesso!");
+                    }
+                }
+            }
+        });
+    }
+});
     const pendentes = await resBusca.json();
 
     if (pendentes && pendentes.length > 0) {
