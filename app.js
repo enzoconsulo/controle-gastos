@@ -335,6 +335,12 @@ async function syncApplePayDireto() {
       let idsParaApagar = [];
       let importados = 0;
       
+      // Função auxiliar para achar a conta dinamicamente pelos IDs reais do estado
+      const findAccId = (keyword) => {
+          const acc = state.accounts.find(a => a.name.toLowerCase().includes(keyword) || a.id === keyword);
+          return acc ? acc.id : null;
+      };
+      
       // 2. Processa cada gasto
       pendentes.forEach(exp => {
          // Cria um ID único para evitar duplicar se rodar duas vezes rápido
@@ -346,30 +352,40 @@ async function syncApplePayDireto() {
             const limpo = String(exp.valor).replace(/[^\d,-]/g, '').replace(',', '.');
             const amountNumber = parseFloat(limpo) || 0;
 
-            // Lógica inteligente para definir a conta e categoria baseada no cartão
-            let contaDestino = "nubank"; // Cartão padrão
+            // ==========================================
+            // 🧠 ROTEADOR INTELIGENTE DE CARTÕES
+            // Alinhado perfeitamente com os IDs do seu state.js
+            // ==========================================
+            const nomeCartao = (exp.cartao || "").toLowerCase();
+            
+            // Fallback padrão se não reconhecer o cartão
+            let contaDestino = "nubank"; 
             let tipoGasto = "credito";
             let categoriaGasto = "outros";
             
-            // Verifica se o nome do cartão enviado pelo iPhone tem "Caju", "VR", "Inter", etc.
-            const nomeCartao = (exp.cartao || "").toLowerCase();
-            
-            if (nomeCartao.includes("caju") || nomeCartao.includes("vr")) {
+            if (nomeCartao.includes("sicoob")) {
+                contaDestino = findAccId("sicoob") || "sicoob";
+            } else if (nomeCartao.includes("itau") || nomeCartao.includes("itaú")) {
+                contaDestino = findAccId("itau") || "itau";
+            } else if (nomeCartao.includes("mercado") || nomeCartao.includes("mp") || nomeCartao.includes("pago")) {
+                contaDestino = "mercado_pago";
+            } else if (nomeCartao.includes("nubank")) {
+                contaDestino = "nubank";
+            } else if (nomeCartao.includes("caju") || nomeCartao.includes("vr")) {
                 contaDestino = "caju"; 
-                tipoGasto = "vr"; // A sua função nativa já desconta o type='vr' do saldo do Caju
-                categoriaGasto = "alimentacao"; 
-            } else if (nomeCartao.includes("inter")) {
-                contaDestino = "inter";
+                tipoGasto = "vr"; 
+                categoriaGasto = "alimentacao";
             }
 
+            // Cria o objeto exato que o sistema processa
             const novaDespesa = {
               id: uniqueId,
               date: exp.date ? exp.date.substring(0,10) : new Date().toISOString().slice(0,10),
               desc: exp.estabelecimento || "Apple Pay",
               amount: amountNumber,
               type: tipoGasto, 
-              accountId: contaDestino, 
-              method: exp.cartao || "Apple Pay",
+              accountId: contaDestino,
+              method: exp.cartao || "Apple Pay", 
               category: categoriaGasto 
             };
 
