@@ -92,9 +92,27 @@ async function syncApplePayDireto() {
                 categoriaGasto = "alimentacao"; // Se for VR, força ser alimentação
             }
 
+            // ==========================================
+            // 🛠️ 3. CORREÇÃO DA DATA (Tradutor de DD/MM/YYYY para YYYY-MM-DD)
+            // ==========================================
+            let dataFormatada = new Date().toISOString().slice(0,10);
+            if (exp.date) {
+                let dStr = exp.date.trim().substring(0, 10);
+                if (dStr.includes('/')) {
+                    // Se o iPhone mandou "15/06/2026", converte para "2026-06-15"
+                    let partes = dStr.split('/');
+                    if (partes.length === 3 && partes[2].length === 4) {
+                        dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+                    }
+                } else if (dStr.includes('-')) {
+                    dataFormatada = dStr; // Já veio correto (ex: 2026-06-15)
+                }
+            }
+
+            // Cria o objeto exato que o sistema processa usando a dataFormatada
             const novaDespesa = {
               id: uniqueId,
-              date: exp.date ? exp.date.substring(0,10) : new Date().toISOString().slice(0,10),
+              date: dataFormatada,
               desc: exp.estabelecimento || "Apple Pay",
               amount: amountNumber,
               type: tipoGasto, 
