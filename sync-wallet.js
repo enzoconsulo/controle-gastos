@@ -20,12 +20,9 @@ function processarCSV(textoCSV) {
     const isConta = header.includes('data,valor,identificador');
 
     if (!isCartao && !isConta) {
-        alert("❌ Formato de CSV não reconhecido. O cabeçalho não bate com o padrão do Nubank.");
+        alert("❌ Formato de CSV não reconhecido. O cabeçalho não coincide com o padrão do Nubank.");
         return;
     }
-
-    const elIgnorarPix = document.getElementById('ignorar-valor-pix');
-    const valorAIgnorar = elIgnorarPix && elIgnorarPix.value ? Math.abs(parseFloat(elIgnorarPix.value)) : null;
     
     let importados = 0;
     let ignorados = 0;
@@ -61,13 +58,7 @@ function processarCSV(textoCSV) {
         const valorAbsoluto = Math.abs(amountNumber);
         const descMinuscula = rawDesc.toLowerCase();
 
-        // 🛑 REGRA 1: IGNORAR FATURA
-        if (descMinuscula.includes('pagamento recebido') || descMinuscula.includes('pagamento de fatura') || descMinuscula.includes('pagamento em lotérica')) {
-            ignorados++;
-            continue; 
-        }
-
-        // 🛑 REGRA 2: IGNORAR TRANSFERÊNCIAS INTERNAS
+        // 🛑 REGRA ÚNICA DE BLOQUEIO: Transferências para contas com o próprio nome
         if (descMinuscula.includes('enzo cesar')) {
             ignorados++;
             continue; 
@@ -83,21 +74,21 @@ function processarCSV(textoCSV) {
         if (isConta) tipoGasto = amountNumber < 0 ? "saldo" : "entrada"; 
         else tipoGasto = amountNumber > 0 ? "credito" : "entrada"; 
 
-        // 🟢 O ROTEADOR VIP (Regras Rígidas acima do Dicionário)
+        // 🟢 O ROTEADOR VIP (Fluxo de Caixa Real)
         let categoriaGasto = "outros";
         let pularDicionario = false;
 
-        if (descMinuscula.includes('cesar odair')) {
-            if (valorAIgnorar !== null && valorAbsoluto === valorAIgnorar) {
-                ignorados++;
-                continue; 
-            } else {
-                categoriaGasto = "familia"; 
-                pularDicionario = true;
-            }
+        if (descMinuscula.includes('pagamento recebido') || descMinuscula.includes('pagamento de fatura') || descMinuscula.includes('pagamento em lotérica')) {
+            categoriaGasto = "fatura_cartao";
+            tipoGasto = "saldo"; // Fatura agora é débito em conta!
+            pularDicionario = true;
+        } else if (descMinuscula.includes('cesar odair')) {
+            categoriaGasto = "familia"; 
+            tipoGasto = "entrada"; // Dinheiro do pai entra de facto na conta!
+            pularDicionario = true;
         } else if (descMinuscula.includes('resgate') || descMinuscula.includes('rendimento') || descMinuscula.includes('rdb') || descMinuscula.includes('fundo')) {
             categoriaGasto = "investimento";
-            tipoGasto = "entrada"; // Força a ser entrada positiva
+            tipoGasto = "entrada"; 
             pularDicionario = true;
         } else if (descMinuscula.includes('shpp') || descMinuscula.includes('shopee') || descMinuscula.includes('aliexpress') || descMinuscula.includes('shein') || descMinuscula.includes('mercado livre')) {
             categoriaGasto = "shopping";
@@ -107,24 +98,17 @@ function processarCSV(textoCSV) {
             pularDicionario = true;
         }
 
-        // 🟡 DICIONÁRIO GERAL (Com Trava de Palavra Exata)
+        // 🟡 DICIONÁRIO GERAL
         if (!pularDicionario && typeof DICT_CATEGORIAS !== "undefined") {
             for (const [cat, keywords] of Object.entries(DICT_CATEGORIAS)) {
-                if (keywords.some(kw => {
-                    // Se a palavra for muito curta (ex: "br", "gol"), exige que ela esteja separada por espaços/pontos
-                    if (kw.length <= 3) {
-                        const regex = new RegExp(`\\b${kw}\\b`, 'i');
-                        return regex.test(descMinuscula);
-                    }
-                    return descMinuscula.includes(kw);
-                })) {
+                if (keywords.some(kw => descMinuscula.includes(kw))) {
                     categoriaGasto = cat;
                     break;
                 }
             }
         }
 
-        // 🛡️ TRAVA ANTI-DUPLICIDADE GERAL
+        // 🛡️ TRAVA ANTI-DUPLICIDADE
         if (state.expenses.some(exp => exp.id === idUnico)) {
             ignorados++;
             continue;
@@ -172,10 +156,7 @@ function processarCSV(textoCSV) {
         updateAll();
     }
     
-    // Zera o input de ignorar para não ficar salvo por engano na próxima rodada
-    if (elIgnorarPix) elIgnorarPix.value = '';
-
-    alert(`📊 Extrato Processado!\n\n✨ Novos registros: ${importados}\n🔗 Mesclados c/ Apple Pay: ${mesclados}\n🚫 Ignorados (Fatura/Duplicados/Pai): ${ignorados}`);
+    alert(`📊 Extrato Processado!\n\n✨ Novos registos: ${importados}\n🔗 Mesclados c/ Apple Pay: ${mesclados}\n🚫 Já registados/Duplicados: ${ignorados}`);
 }
 
 /* ==========================================
@@ -277,7 +258,6 @@ async function syncApplePayDireto() {
    3. LISTENERS DOS BOTÕES
    ========================================== */
 document.addEventListener('DOMContentLoaded', () => {
-    
     const elSyncDate = document.getElementById('last-email-sync');
     if (elSyncDate) {
         const lastSync = localStorage.getItem("lastEmailSync");
@@ -305,11 +285,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSyncEmail.addEventListener('click', async () => {
             const GAS_URL = localStorage.getItem("gasEmailUrl");
             if (!GAS_URL) {
-                alert("⚠️ A URL do Google Script não está configurada.");
+                alert("⚠️ O URL do Google Script não está configurado.");
                 return;
             }
 
-            btnSyncEmail.textContent = "⏳ Procurando e-mail...";
+            btnSyncEmail.textContent = "⏳ A procurar e-mail...";
             btnSyncEmail.style.opacity = "0.7";
 
             try {
@@ -323,11 +303,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         processarCSV(json.data);
                     }
                     
-                    const agora = new Date().toLocaleString('pt-BR');
+                    const agora = new Date().toLocaleString('pt-PT');
                     localStorage.setItem("lastEmailSync", agora);
                     if (elSyncDate) elSyncDate.textContent = agora;
                 } else {
-                    alert(`ℹ️ Status: ${json.message}`);
+                    alert(`ℹ️ Estado: ${json.message}`);
                 }
             } catch (erro) {
                 alert("❌ Erro ao conectar com o Google Script.");

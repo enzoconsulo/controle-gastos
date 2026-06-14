@@ -234,7 +234,8 @@ function renderCategoryPie(){
   state.expenses
     .filter(e => billingMonthOf(e.date) === month && !BUSINESS_ACCOUNTS.includes(e.accountId))
     .forEach(e=>{
-      if(e.type === 'entrada') return;
+      // IGNORA entradas e IGNORA o pagamento da fatura para não duplicar no gráfico
+      if(e.type === 'entrada' || e.category === 'fatura_cartao') return;
       map[e.category] = (map[e.category]||0) + Number(e.amount||0);
     });
     
@@ -258,7 +259,8 @@ function monthlyTotalsLastN(n=6){
   for(let i=state.meta.activeOffset-(n-1); i<=state.meta.activeOffset; i++){
     const month = computeMonthFromOffset(i);
     const total = state.expenses
-      .filter(e => billingMonthOf(e.date) === month && e.type !== 'entrada' && !BUSINESS_ACCOUNTS.includes(e.accountId))
+      // IGNORA entradas e IGNORA o pagamento da fatura para a linha do tempo não duplicar
+      .filter(e => billingMonthOf(e.date) === month && e.type !== 'entrada' && e.category !== 'fatura_cartao' && !BUSINESS_ACCOUNTS.includes(e.accountId))
       .reduce((s,x)=>s+Number(x.amount||0),0);
     arr.push({month,total});
   }
@@ -766,7 +768,7 @@ function applySalary(){
   alert(`Entrada aplicada: ${money(entrada)}\nVR (Caju) recarregado com: ${money(vr)}`);
 }
 
-/* applyCard - fecha fatura anterior e atualiza crédito global (mantido) */
+/* applyCard - fecha fatura anterior e atualiza crédito global (Fluxo de Caixa Real) */
 function applyCard(){
   const newGlobalCredit = Number(document.getElementById('inicio-credit-global').value || 0);
   const vr = Number(document.getElementById('inicio-vr-total').value || 0);
@@ -780,31 +782,14 @@ function applyCard(){
     return;
   }
 
-  // 1) FECHAMENTO DO CRÉDITO DO MÊS ANTERIOR
-  const prevCreditTotal = Number(state.totals.credito_total || 0);
-  const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
-  const cajuId = caju ? caju.id : null;
-
-  let creditUsedPrevMonth = 0;
-  state.expenses
-    .filter(e => billingMonthOf(e.date) === prevMonth && e.type === 'credito' && e.accountId !== cajuId)
-    .forEach(e => { creditUsedPrevMonth += Number(e.amount || 0); });
-
-  const creditBalance = prevCreditTotal - creditUsedPrevMonth;
-
-  // joga diferença no Nubank
-  const nubank = state.accounts.find(a => a.name.toLowerCase().includes('nubank'));
-  if(nubank && creditBalance !== 0){
-    nubank.saldo = Number(nubank.saldo || 0) + creditBalance;
-  }
-
-  // marca mês como fechado (para não fechar duas vezes)
+  // 1) MARCAR MÊS COMO FECHADO
   state.meta.lastCreditClosed = prevMonth;
 
-  // 2) ATUALIZA O CRÉDITO GLOBAL
+  // 2) ATUALIZAR O CRÉDITO GLOBAL
   state.totals.credito_total = newGlobalCredit;
 
   // 3) atualizar VR/caju se informado
+  const caju = state.accounts.find(a => a.name.toLowerCase().includes('caju') || a.name.toLowerCase().includes('vr'));
   if(caju && !isNaN(vr) && vr > 0){
     state.totals.vr_total = vr;
     caju.saldo = Number(vr || 0);
@@ -823,7 +808,7 @@ function applyCard(){
 
   saveState();
   updateAll();
-  alert(`Fatura de ${prevMonth} fechada.\nDiferença (adicionada a Nubank): ${money(creditBalance)}\nCrédito global atualizado: ${money(newGlobalCredit)}`);
+  alert(`Fatura de ${prevMonth} encerrada no sistema.\n\nO pagamento real debitará do seu saldo quando você importar o CSV do Nubank!\n\nNovo limite global: ${money(newGlobalCredit)}`);
 }
 
 /* Fecha o mês lógico (mantido) */
