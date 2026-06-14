@@ -23,7 +23,13 @@ function processarCSV(textoCSV) {
         alert("❌ Formato de CSV não reconhecido. O cabeçalho não coincide com o padrão do Nubank.");
         return;
     }
+
+    const elIgnorarPix = document.getElementById('ignorar-valor-pix');
+    const valorAIgnorar = elIgnorarPix && elIgnorarPix.value ? Math.abs(parseFloat(elIgnorarPix.value)) : null;
     
+    // VARIÁVEL DINÂMICA DO PAGADOR (Tirada do hardcode)
+    const pagadorDinâmico = (localStorage.getItem("configPagador") || "cesar odair").toLowerCase().trim();
+
     let importados = 0;
     let ignorados = 0;
     let mesclados = 0;
@@ -58,7 +64,7 @@ function processarCSV(textoCSV) {
         const valorAbsoluto = Math.abs(amountNumber);
         const descMinuscula = rawDesc.toLowerCase();
 
-        // 🛑 REGRA ÚNICA DE BLOQUEIO: Transferências para contas com o próprio nome
+        // 🛑 REGRA ÚNICA DE BLOQUEIO
         if (descMinuscula.includes('enzo cesar')) {
             ignorados++;
             continue; 
@@ -80,11 +86,11 @@ function processarCSV(textoCSV) {
 
         if (descMinuscula.includes('pagamento recebido') || descMinuscula.includes('pagamento de fatura') || descMinuscula.includes('pagamento em lotérica')) {
             categoriaGasto = "fatura_cartao";
-            tipoGasto = "saldo"; // Fatura agora é débito em conta!
+            tipoGasto = "saldo"; 
             pularDicionario = true;
-        } else if (descMinuscula.includes('cesar odair')) {
+        } else if (pagadorDinâmico !== "" && descMinuscula.includes(pagadorDinâmico)) {
             categoriaGasto = "familia"; 
-            tipoGasto = "entrada"; // Dinheiro do pai entra de facto na conta!
+            tipoGasto = "entrada"; 
             pularDicionario = true;
         } else if (descMinuscula.includes('resgate') || descMinuscula.includes('rendimento') || descMinuscula.includes('rdb') || descMinuscula.includes('fundo')) {
             categoriaGasto = "investimento";
@@ -108,13 +114,12 @@ function processarCSV(textoCSV) {
             }
         }
 
-        // 🛡️ TRAVA ANTI-DUPLICIDADE
+        // 🛡️ TRAVAS E RECONCILIAÇÃO
         if (state.expenses.some(exp => exp.id === idUnico)) {
             ignorados++;
             continue;
         }
 
-        // 🛡️ MOTOR DE RECONCILIAÇÃO (APPLE PAY)
         const tTarget = parseDateString(dataFormatada);
         const matchIndex = state.expenses.findIndex(exp => {
             if (exp.accountId !== "nubank" && exp.accountId !== "caju") return false;
@@ -156,6 +161,7 @@ function processarCSV(textoCSV) {
         updateAll();
     }
     
+    if (elIgnorarPix) elIgnorarPix.value = '';
     alert(`📊 Extrato Processado!\n\n✨ Novos registos: ${importados}\n🔗 Mesclados c/ Apple Pay: ${mesclados}\n🚫 Já registados/Duplicados: ${ignorados}`);
 }
 
@@ -164,7 +170,10 @@ function processarCSV(textoCSV) {
    ========================================== */
 async function syncApplePayDireto() {
   let SUPABASE_KEY = localStorage.getItem("secretSupaKey");
-  if (!SUPABASE_KEY) return; 
+  if (!SUPABASE_KEY) {
+      alert("⚠️ A Chave do Supabase não está configurada.\nVá em Configurações Locais e salve sua chave.");
+      return; 
+  }
 
   const HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -174,7 +183,10 @@ async function syncApplePayDireto() {
 
   try {
     const resBusca = await fetch(`${SUPABASE_URL}/rest/v1/pendentes?select=*`, { method: "GET", headers: HEADERS });
-    if (!resBusca.ok) return;
+    if (!resBusca.ok) {
+        alert("❌ Erro ao conectar ao Supabase. Verifique se a sua Chave está correta nas Configurações Locais.");
+        return;
+    }
 
     const pendentes = await resBusca.json();
 
@@ -255,41 +267,54 @@ async function syncApplePayDireto() {
 }
 
 /* ==========================================
-   3. LISTENERS DOS BOTÕES
+   3. LISTENERS DA INTERFACE E CONFIGURAÇÕES
    ========================================== */
 document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- 3.1: Carregar Configurações Locais Salvas na Tela ---
+    const elGasUrl = document.getElementById('config-gas-url');
+    const elSupaKey = document.getElementById('config-supa-key');
+    const elPagador = document.getElementById('config-pagador');
+
+    if (elGasUrl) elGasUrl.value = localStorage.getItem("gasEmailUrl") || "";
+    if (elSupaKey) elSupaKey.value = localStorage.getItem("secretSupaKey") || "";
+    if (elPagador) elPagador.value = localStorage.getItem("configPagador") || "";
+
+    // --- 3.2: Botão Salvar Configurações ---
+    const btnSaveConfigs = document.getElementById('btn-save-configs');
+    if (btnSaveConfigs) {
+        btnSaveConfigs.addEventListener('click', () => {
+            if (elGasUrl) localStorage.setItem("gasEmailUrl", elGasUrl.value.trim());
+            if (elSupaKey) localStorage.setItem("secretSupaKey", elSupaKey.value.trim());
+            if (elPagador) localStorage.setItem("configPagador", elPagador.value.trim());
+            
+            btnSaveConfigs.textContent = "✅ Salvo com sucesso!";
+            btnSaveConfigs.style.background = "#059669";
+            setTimeout(() => {
+                btnSaveConfigs.innerHTML = "💾 Salvar Configurações";
+                btnSaveConfigs.style.background = "#10b981";
+            }, 2000);
+        });
+    }
+
+    // --- 3.3: Exibir Tracking de E-mail ---
     const elSyncDate = document.getElementById('last-email-sync');
     if (elSyncDate) {
         const lastSync = localStorage.getItem("lastEmailSync");
         elSyncDate.textContent = lastSync ? lastSync : "Nunca realizado";
     }
 
-    const btnChangeGas = document.getElementById('btn-change-gas-url');
-    if (btnChangeGas) {
-        btnChangeGas.addEventListener('click', () => {
-            const currentUrl = localStorage.getItem("gasEmailUrl") || "";
-            const novaUrl = prompt("⚙️ Insira a URL do Google Apps Script (terminada em /exec):", currentUrl);
-            if (novaUrl !== null) { 
-                if (novaUrl.trim() !== "") {
-                    localStorage.setItem("gasEmailUrl", novaUrl.trim());
-                    alert("✅ URL configurada!");
-                } else {
-                    localStorage.removeItem("gasEmailUrl");
-                }
-            }
-        });
-    }
-
+    // --- 3.4: Botões de Sincronização Executáveis ---
     const btnSyncEmail = document.getElementById('btn-sync-email');
     if (btnSyncEmail) {
         btnSyncEmail.addEventListener('click', async () => {
             const GAS_URL = localStorage.getItem("gasEmailUrl");
             if (!GAS_URL) {
-                alert("⚠️ O URL do Google Script não está configurado.");
+                alert("⚠️ A URL do Google Script não está configurada.\nPreencha em 'Configurações Locais' e salve.");
                 return;
             }
 
-            btnSyncEmail.textContent = "⏳ A procurar e-mail...";
+            btnSyncEmail.textContent = "⏳ Procurando e-mail...";
             btnSyncEmail.style.opacity = "0.7";
 
             try {
@@ -307,10 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem("lastEmailSync", agora);
                     if (elSyncDate) elSyncDate.textContent = agora;
                 } else {
-                    alert(`ℹ️ Estado: ${json.message}`);
+                    alert(`ℹ️ Status: ${json.message}`);
                 }
             } catch (erro) {
-                alert("❌ Erro ao conectar com o Google Script.");
+                alert("❌ Erro ao conectar com o Google Script. Verifique se a URL na configuração está correta.");
             } finally {
                 btnSyncEmail.textContent = "📩 Puxar do E-mail";
                 btnSyncEmail.style.opacity = "1";
@@ -334,16 +359,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnSyncWallet = document.getElementById('btn-sync-wallet');
     if (btnSyncWallet) btnSyncWallet.addEventListener('click', syncApplePayDireto);
-
-    const btnChangeKey = document.getElementById('btn-change-supa-key');
-    if (btnChangeKey) {
-        btnChangeKey.addEventListener('click', () => {
-            const currentKey = localStorage.getItem("secretSupaKey") || "";
-            const novaChave = prompt("🔑 Insira a Chave (Publishable) do Supabase:", currentKey);
-            if (novaChave !== null) { 
-                if (novaChave.trim() !== "") localStorage.setItem("secretSupaKey", novaChave.trim());
-                else localStorage.removeItem("secretSupaKey");
-            }
-        });
-    }
 });

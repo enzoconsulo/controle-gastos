@@ -192,13 +192,7 @@
     </section>
 
     <section id="tab-input" class="tab-panel inputs app-panel">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h2 class="panel-title" style="margin: 0;">Novo lançamento</h2>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" id="btn-sync-wallet" class="btn ghost" style="font-size: 0.75rem; padding: 4px 8px; border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa;">🔄 Sincronizar Wallet</button>
-          <button type="button" id="btn-change-supa-key" class="btn ghost" style="font-size: 0.75rem; padding: 4px 8px; border: 1px solid rgba(255,255,255,0.1);">🔑 Trocar Chave</button>
-        </div>
-      </div>
+      <h2 class="panel-title" style="margin-bottom: 16px;">Novo lançamento</h2>
 
       <form id="expense-form" class="form-grid">
         <div class="form-field">
@@ -528,31 +522,37 @@
 
     <section id="tab-integrations" class="tab-panel app-panel">
       <div style="margin-bottom: 24px;">
-        <h2 class="panel-title">Central de Sincronização</h2>
-        <p style="font-size: 0.85rem; color: #9ca3af; margin-top: 4px;">Gerencie as automações do Apple Pay e dos extratos.</p>
+        <h2 class="panel-title">Central do Sistema</h2>
+        <p style="font-size: 0.85rem; color: #9ca3af; margin-top: 4px;">Gerencie integrações, extratos e variáveis locais.</p>
+      </div>
+
+      <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="font-size: 1rem; color: #f8fafc; margin: 0 0 16px 0;">⚙️ Configurações Locais</h3>
+        
+        <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.75rem; color: #cbd5e1; display: block; margin-bottom: 4px;">URL do Robô (Google Apps Script)</label>
+            <input type="text" id="config-gas-url" class="input-field" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px; border-radius: 6px;" placeholder="https://script.google.com/.../exec" />
+        </div>
+
+        <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.75rem; color: #cbd5e1; display: block; margin-bottom: 4px;">Chave API (Supabase / Apple Pay)</label>
+            <input type="password" id="config-supa-key" class="input-field" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px; border-radius: 6px;" placeholder="eyJh..." />
+        </div>
+
+        <div style="margin-bottom: 16px;">
+            <label style="font-size: 0.75rem; color: #cbd5e1; display: block; margin-bottom: 4px;">Pagador Frequente (Ex: Pix do seu pai)</label>
+            <input type="text" id="config-pagador" class="input-field" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px; border-radius: 6px;" placeholder="Ex: enzo cesar" />
+        </div>
+
+        <button type="button" id="btn-save-configs" class="btn" style="width: 100%; background: #10b981; color: #fff; font-weight: 600;">💾 Salvar Configurações</button>
       </div>
 
       <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 style="font-size: 1rem; color: #f8fafc; margin: 0;">🍎 Apple Pay (Supabase)</h3>
-          <button type="button" id="btn-change-supa-key" class="btn ghost" style="font-size: 0.75rem; padding: 4px 8px;">🔑 Trocar Chave</button>
-        </div>
-        <p style="font-size: 0.8rem; color: #9ca3af; margin-bottom: 16px;">Sincroniza automaticamente as compras feitas com aproximação no iPhone.</p>
-        <button type="button" id="btn-sync-wallet" class="btn" style="width: 100%; background: #3b82f6; color: #fff;">🔄 Puxar do Apple Pay</button>
-      </div>
-
-      <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h3 style="font-size: 1rem; color: #f8fafc; margin: 0;">🟣 Extrato Nubank Automático</h3>
-          <button type="button" id="btn-change-gas-url" class="btn ghost" style="font-size: 0.75rem; padding: 4px 8px;">⚙️ Configurar URL (Google)</button>
         </div>
         <p style="font-size: 0.8rem; color: #9ca3af; margin-bottom: 16px;">Busca automaticamente o último extrato no Gmail ou por upload manual.</p>
         
-        <div style="margin-bottom: 16px;">
-            <label style="font-size: 0.75rem; color: #cbd5e1; display: block; margin-bottom: 4px;">Ignorar Pix Específico (Ex: Pai pagando a fatura)</label>
-            <input type="number" id="ignorar-valor-pix" placeholder="Ex: 2300.00" class="input-field" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px; border-radius: 6px;" />
-        </div>
-
         <div style="display: flex; gap: 8px;">
             <button type="button" id="btn-sync-email" class="btn" style="flex: 1; background: #8b5cf6; color: #fff;">📩 Puxar do E-mail</button>
             <label for="btn-import-csv" class="btn ghost" style="flex: 1; text-align: center; cursor: pointer; margin: 0; box-sizing: border-box;">
@@ -562,6 +562,14 @@
         </div>
         <p style="font-size: 0.7rem; color: #64748b; margin-top: 12px; text-align: center;">Última verificação: <span id="last-email-sync">Nunca</span></p>
       </div>
+
+      <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="font-size: 1rem; color: #f8fafc; margin: 0;">🍎 Apple Pay (Supabase)</h3>
+        </div>
+        <p style="font-size: 0.8rem; color: #9ca3af; margin-bottom: 16px;">Sincroniza automaticamente as compras feitas com aproximação no iPhone.</p>
+        <button type="button" id="btn-sync-wallet" class="btn" style="width: 100%; background: #3b82f6; color: #fff;">🔄 Puxar do Apple Pay</button>
+      </div>
     </section>
   </main>
 
@@ -570,12 +578,10 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.pluggy.ai/pluggy-connect/v2.7.0/pluggy-connect.js"></script>
   <script src="state.js?v=1"></script>
   <script src="finances.js?v=1"></script>
   <script src="impressora.js?v=1"></script>
   <script src="app.js?v=1"></script>
-  <script src="sync-pluggy-ui.js?v=13"></script>
   <script src="categorias.js?v=1"></script> <script src="sync-wallet.js?v=1"></script>
 
   <script>

@@ -560,6 +560,7 @@ function renderLogTable(){
 }
 
 /* efeitos dos lançamentos (inclui VR debitando saldo do Caju) */
+/* efeitos dos lançamentos (Atualizado: CSV não mexe mais no "Guardado") */
 function applyExpenseEffects(exp){
   if(exp.type === 'vr'){
     const caju = state.accounts.find(a =>
@@ -590,16 +591,19 @@ function applyExpenseEffects(exp){
   }
   else if(exp.type === 'entrada'){
     acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
-    if(exp.category === 'investimento'){
-      acc.guardado = Number(acc.guardado||0) + Number(exp.amount||0);
-    }
+    // REMOVIDA A REGRA BUGADA QUE SOMAVA AO 'GUARDADO' AQUI
   }
   else if(exp.type === 'vr'){
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
   }
 }
 
-function applyExpenseReverse(exp){
+/* Devolve o saldo ao excluir um Log (Corrigido para aceitar ID ou Objeto) */
+function applyExpenseReverse(expOrId){
+  // Garante que funciona tanto se receber a ID do Log (ao excluir) quanto o objeto inteiro
+  let exp = typeof expOrId === 'string' ? state.expenses.find(x => x.id === expOrId) : expOrId;
+  if(!exp) return;
+
   if(exp.type === 'transferencia'){
     const fromAcc = state.accounts.find(a => a.id === exp.accountId);
     const toAcc = state.accounts.find(a => a.id === exp.transferToAccountId);
@@ -619,9 +623,7 @@ function applyExpenseReverse(exp){
   }
   else if(exp.type === 'entrada'){
     acc.saldo = Number(acc.saldo||0) - Number(exp.amount||0);
-    if(exp.category === 'investimento'){
-      acc.guardado = Number(acc.guardado||0) - Number(exp.amount||0);
-    }
+    // REMOVIDA A REGRA BUGADA QUE SUBTRAÍA DO 'GUARDADO' AQUI
   }
   else if(exp.type === 'vr'){
     acc.saldo = Number(acc.saldo||0) + Number(exp.amount||0);
