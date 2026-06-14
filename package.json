@@ -1,0 +1,34 @@
+{
+  "name": "controle-gastos",
+  "version": "1.0.0",
+  "description": "Aplicação de controle de gastos com gerenciamento de impressora 3D",
+  "main": "app.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose",
+    "test:state": "jest tests/state.test.js",
+    "test:finances": "jest tests/finances.test.js",
+    "test:impressora": "jest tests/impressora.test.js",
+    "test:sync": "jest tests/sync-wallet.test.js",
+    "test:categorias": "jest tests/categorias.test.js",
+    "test:integration": "jest tests/integration.test.js",
+    "test:all": "jest --verbose --coverage"
+  },
+  "keywords": [
+    "controle",
+    "gastos",
+    "impressora3d",
+    "financeiro"
+  ],
+  "author": "Enzo Cesar",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  }
+}
