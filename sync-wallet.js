@@ -27,7 +27,7 @@ function processarCSV(textoCSV) {
     const elIgnorarPix = document.getElementById('ignorar-valor-pix');
     const valorAIgnorar = elIgnorarPix && elIgnorarPix.value ? Math.abs(parseFloat(elIgnorarPix.value)) : null;
     
-    // VARIÁVEL DINÂMICA DO PAGADOR (Tirada do hardcode)
+    // VARIÁVEL DINÂMICA DO PAGADOR
     const pagadorDinâmico = (localStorage.getItem("configPagador") || "cesar odair").toLowerCase().trim();
 
     let importados = 0;
@@ -64,10 +64,16 @@ function processarCSV(textoCSV) {
         const valorAbsoluto = Math.abs(amountNumber);
         const descMinuscula = rawDesc.toLowerCase();
 
-        // 🛑 REGRA ÚNICA DE BLOQUEIO
+        // 🛑 REGRA 1: IGNORAR TRANSFERÊNCIAS INTERNAS
         if (descMinuscula.includes('enzo cesar')) {
             ignorados++;
             continue; 
+        }
+
+        // 🛑 REGRA 2: IGNORAR "PAGAMENTO RECEBIDO" DO CARTÃO DE CRÉDITO
+        if (isCartao && (descMinuscula.includes('pagamento recebido') || descMinuscula.includes('pagamento de fatura') || descMinuscula.includes('pagamento em lotérica'))) {
+            ignorados++;
+            continue;
         }
 
         let dataFormatada = rawDate;
@@ -76,25 +82,23 @@ function processarCSV(textoCSV) {
             dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
         }
 
+        // O SISTEMA DETETA AUTOMATICAMENTE SE ENTROU OU SAIU DINHEIRO
         let tipoGasto;
         if (isConta) tipoGasto = amountNumber < 0 ? "saldo" : "entrada"; 
         else tipoGasto = amountNumber > 0 ? "credito" : "entrada"; 
 
-        // 🟢 O ROTEADOR VIP (Fluxo de Caixa Real)
+        // 🟢 O ROTEADOR VIP (Categorização sem forçar a troca de saldo/entrada)
         let categoriaGasto = "outros";
         let pularDicionario = false;
 
-        if (descMinuscula.includes('pagamento recebido') || descMinuscula.includes('pagamento de fatura') || descMinuscula.includes('pagamento em lotérica')) {
+        if (descMinuscula.includes('pagamento de fatura')) {
             categoriaGasto = "fatura_cartao";
-            tipoGasto = "saldo"; 
             pularDicionario = true;
         } else if (pagadorDinâmico !== "" && descMinuscula.includes(pagadorDinâmico)) {
             categoriaGasto = "familia"; 
-            tipoGasto = "entrada"; 
             pularDicionario = true;
         } else if (descMinuscula.includes('resgate') || descMinuscula.includes('rendimento') || descMinuscula.includes('rdb') || descMinuscula.includes('fundo')) {
             categoriaGasto = "investimento";
-            tipoGasto = "entrada"; 
             pularDicionario = true;
         } else if (descMinuscula.includes('shpp') || descMinuscula.includes('shopee') || descMinuscula.includes('aliexpress') || descMinuscula.includes('shein') || descMinuscula.includes('mercado livre')) {
             categoriaGasto = "shopping";
