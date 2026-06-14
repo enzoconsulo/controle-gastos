@@ -1,19 +1,189 @@
 /* ========================================================
-   INTEGRAÇÃO APPLE PAY (SUPABASE API)
+   INTEGRAÇÃO APPLE PAY, E-MAIL (GOOGLE SCRIPT) E CSV
    ======================================================== */
 const SUPABASE_URL = "https://vrtbzubfmjmbyofksnzs.supabase.co";
 
+const parseDateString = (dStr) => {
+    const [y, m, d] = dStr.split('-');
+    return new Date(y, m - 1, d).getTime();
+};
+
+/* ==========================================
+   1. FUNÇÃO CENTRAL DE PROCESSAMENTO DO CSV
+   ========================================== */
+function processarCSV(textoCSV) {
+    const rows = textoCSV.split('\n').filter(row => row.trim().length > 0);
+    if (rows.length < 2) return;
+
+    const header = rows[0].toLowerCase();
+    const isCartao = header.includes('date,title,amount');
+    const isConta = header.includes('data,valor,identificador');
+
+    if (!isCartao && !isConta) {
+        alert("❌ Formato de CSV não reconhecido. O cabeçalho não bate com o padrão do Nubank.");
+        return;
+    }
+
+    const elIgnorarPix = document.getElementById('ignorar-valor-pix');
+    const valorAIgnorar = elIgnorarPix && elIgnorarPix.value ? Math.abs(parseFloat(elIgnorarPix.value)) : null;
+    
+    let importados = 0;
+    let ignorados = 0;
+    let mesclados = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        if (cols.length < 3) continue;
+
+        let rawDate, rawAmountStr, idUnico, rawDesc;
+
+        if (isConta) {
+            rawDate = cols[0].trim();
+            rawAmountStr = cols[1].trim();
+            idUnico = cols[2].trim();
+            rawDesc = cols[3].trim().replace(/^"|"$/g, '');
+        } else {
+            rawDate = cols[0].trim();
+            rawDesc = cols[1].trim().replace(/^"|"$/g, '');
+            rawAmountStr = cols[2].trim().replace(/^"|"$/g, '');
+            const textoLimpo = rawDesc.replace(/\W/g, '').substring(0, 10);
+            idUnico = `cc-${rawDate}-${rawAmountStr.replace(/\D/g, '')}-${textoLimpo}`;
+        }
+
+        let amountNumber = 0;
+        if (isConta) {
+            amountNumber = parseFloat(rawAmountStr);
+        } else {
+            const limpo = rawAmountStr.replace(/\./g, '').replace(',', '.').replace(/\s/g, '');
+            amountNumber = parseFloat(limpo);
+        }
+        
+        const valorAbsoluto = Math.abs(amountNumber);
+        const descMinuscula = rawDesc.toLowerCase();
+
+        // 🛑 REGRA 1: IGNORAR FATURA
+        if (descMinuscula.includes('pagamento recebido') || descMinuscula.includes('pagamento de fatura') || descMinuscula.includes('pagamento em lotérica')) {
+            ignorados++;
+            continue; 
+        }
+
+        // 🛑 REGRA 2: IGNORAR TRANSFERÊNCIAS INTERNAS
+        if (descMinuscula.includes('enzo cesar')) {
+            ignorados++;
+            continue; 
+        }
+
+        let dataFormatada = rawDate;
+        if (rawDate.includes('/')) {
+            const partes = rawDate.split('/');
+            dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+        }
+
+        let tipoGasto;
+        if (isConta) tipoGasto = amountNumber < 0 ? "saldo" : "entrada"; 
+        else tipoGasto = amountNumber > 0 ? "credito" : "entrada"; 
+
+        // 🟢 O ROTEADOR VIP (Regras Rígidas acima do Dicionário)
+        let categoriaGasto = "outros";
+        let pularDicionario = false;
+
+        if (descMinuscula.includes('cesar odair')) {
+            if (valorAIgnorar !== null && valorAbsoluto === valorAIgnorar) {
+                ignorados++;
+                continue; 
+            } else {
+                categoriaGasto = "familia"; 
+                pularDicionario = true;
+            }
+        } else if (descMinuscula.includes('resgate') || descMinuscula.includes('rendimento') || descMinuscula.includes('rdb') || descMinuscula.includes('fundo')) {
+            categoriaGasto = "investimento";
+            tipoGasto = "entrada"; // Força a ser entrada positiva
+            pularDicionario = true;
+        } else if (descMinuscula.includes('shpp') || descMinuscula.includes('shopee') || descMinuscula.includes('aliexpress') || descMinuscula.includes('shein') || descMinuscula.includes('mercado livre')) {
+            categoriaGasto = "shopping";
+            pularDicionario = true;
+        } else if (descMinuscula.includes('eletronicwave')) {
+            categoriaGasto = "lazer";
+            pularDicionario = true;
+        }
+
+        // 🟡 DICIONÁRIO GERAL (Com Trava de Palavra Exata)
+        if (!pularDicionario && typeof DICT_CATEGORIAS !== "undefined") {
+            for (const [cat, keywords] of Object.entries(DICT_CATEGORIAS)) {
+                if (keywords.some(kw => {
+                    // Se a palavra for muito curta (ex: "br", "gol"), exige que ela esteja separada por espaços/pontos
+                    if (kw.length <= 3) {
+                        const regex = new RegExp(`\\b${kw}\\b`, 'i');
+                        return regex.test(descMinuscula);
+                    }
+                    return descMinuscula.includes(kw);
+                })) {
+                    categoriaGasto = cat;
+                    break;
+                }
+            }
+        }
+
+        // 🛡️ TRAVA ANTI-DUPLICIDADE GERAL
+        if (state.expenses.some(exp => exp.id === idUnico)) {
+            ignorados++;
+            continue;
+        }
+
+        // 🛡️ MOTOR DE RECONCILIAÇÃO (APPLE PAY)
+        const tTarget = parseDateString(dataFormatada);
+        const matchIndex = state.expenses.findIndex(exp => {
+            if (exp.accountId !== "nubank" && exp.accountId !== "caju") return false;
+            if (exp.amount !== valorAbsoluto) return false;
+            if (exp.id.startsWith("cc-") || (exp.id.length === 36 && exp.id.includes('-') && exp.id.split('-').length === 5)) return false;
+
+            const tExp = parseDateString(exp.date);
+            const diffDays = Math.abs(tTarget - tExp) / (1000 * 60 * 60 * 24);
+            return diffDays === 0;
+        });
+
+        if (matchIndex !== -1) {
+            state.expenses[matchIndex].id = idUnico; 
+            if (!state.expenses[matchIndex].method.includes("Confirmado")) {
+                state.expenses[matchIndex].method += " ✓ Confirmado";
+            }
+            mesclados++;
+            continue; 
+        }
+
+        const novaDespesa = {
+            id: idUnico,
+            date: dataFormatada,
+            desc: rawDesc,
+            amount: valorAbsoluto,
+            type: tipoGasto,
+            accountId: "nubank",
+            method: isCartao ? "Fatura CSV" : "Extrato",
+            category: categoriaGasto
+        };
+
+        if (typeof applyExpenseEffects === 'function') applyExpenseEffects(novaDespesa);
+        state.expenses.push(novaDespesa);
+        importados++;
+    }
+
+    if (importados > 0 || mesclados > 0) {
+        saveState();
+        updateAll();
+    }
+    
+    // Zera o input de ignorar para não ficar salvo por engano na próxima rodada
+    if (elIgnorarPix) elIgnorarPix.value = '';
+
+    alert(`📊 Extrato Processado!\n\n✨ Novos registros: ${importados}\n🔗 Mesclados c/ Apple Pay: ${mesclados}\n🚫 Ignorados (Fatura/Duplicados/Pai): ${ignorados}`);
+}
+
+/* ==========================================
+   2. SINCRONIZAÇÃO DO APPLE PAY (SUPABASE)
+   ========================================== */
 async function syncApplePayDireto() {
   let SUPABASE_KEY = localStorage.getItem("secretSupaKey");
-  
-  if (!SUPABASE_KEY) {
-    SUPABASE_KEY = prompt("🔒 Segurança: Insira a Chave (Publishable/Anon) do Supabase para puxar os gastos:");
-    if (SUPABASE_KEY) {
-      localStorage.setItem("secretSupaKey", SUPABASE_KEY.trim());
-    } else {
-      return; 
-    }
-  }
+  if (!SUPABASE_KEY) return; 
 
   const HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -22,18 +192,8 @@ async function syncApplePayDireto() {
   };
 
   try {
-    const resBusca = await fetch(`${SUPABASE_URL}/rest/v1/pendentes?select=*`, {
-      method: "GET",
-      headers: HEADERS
-    });
-    
-    if (!resBusca.ok) {
-        if(resBusca.status === 401 || resBusca.status === 403) {
-            alert("❌ Chave do Supabase inválida. Recarregue a página e tente novamente.");
-            localStorage.removeItem("secretSupaKey");
-        }
-        return;
-    }
+    const resBusca = await fetch(`${SUPABASE_URL}/rest/v1/pendentes?select=*`, { method: "GET", headers: HEADERS });
+    if (!resBusca.ok) return;
 
     const pendentes = await resBusca.json();
 
@@ -48,13 +208,10 @@ async function syncApplePayDireto() {
       
       pendentes.forEach(exp => {
          const uniqueId = `supa-${exp.id}`;
-         const exists = state.expenses.find(e => e.id === uniqueId); 
-         
-         if (!exists) {
+         if (!state.expenses.some(e => e.id === uniqueId)) {
             const limpo = String(exp.valor).replace(/[^\d,-]/g, '').replace(',', '.');
             const amountNumber = parseFloat(limpo) || 0;
 
-            // Pega o nome do cartão e do estabelecimento em minúsculo
             const nomeCartao = (exp.cartao || "").toLowerCase();
             const nomeLugar = (exp.estabelecimento || "").toLowerCase();
 
@@ -62,10 +219,6 @@ async function syncApplePayDireto() {
             let tipoGasto = "credito";
             let categoriaGasto = "outros";
             
-            // ==========================================
-            // 🧠 1. ROTEADOR DE CATEGORIAS (Pelo arquivo externo)
-            // ==========================================
-            // Varre a variável global DICT_CATEGORIAS que foi importada no index.html
             if (typeof DICT_CATEGORIAS !== "undefined") {
                 for (const [cat, keywords] of Object.entries(DICT_CATEGORIAS)) {
                     if (keywords.some(kw => nomeLugar.includes(kw))) {
@@ -75,41 +228,22 @@ async function syncApplePayDireto() {
                 }
             }
 
-            // ==========================================
-            // 🧠 2. ROTEADOR DE CARTÕES / CONTAS
-            // ==========================================
-            if (nomeCartao.includes("sicoob")) {
-                contaDestino = findAccId("sicoob") || "sicoob";
-            } else if (nomeCartao.includes("itau") || nomeCartao.includes("itaú")) {
-                contaDestino = findAccId("itau") || "itau";
-            } else if (nomeCartao.includes("mercado") || nomeCartao.includes("mp") || nomeCartao.includes("pago")) {
-                contaDestino = "mercado_pago";
-            } else if (nomeCartao.includes("nubank")) {
-                contaDestino = "nubank";
-            } else if (nomeCartao.includes("caju") || nomeCartao.includes("vr")) {
-                contaDestino = "caju"; 
-                tipoGasto = "vr"; 
-                categoriaGasto = "alimentacao"; // Se for VR, força ser alimentação
+            if (nomeCartao.includes("sicoob")) contaDestino = findAccId("sicoob") || "sicoob";
+            else if (nomeCartao.includes("itau") || nomeCartao.includes("itaú")) contaDestino = findAccId("itau") || "itau";
+            else if (nomeCartao.includes("mercado") || nomeCartao.includes("mp") || nomeCartao.includes("pago")) contaDestino = "mercado_pago";
+            else if (nomeCartao.includes("caju") || nomeCartao.includes("vr")) {
+                contaDestino = "caju"; tipoGasto = "vr"; categoriaGasto = "alimentacao";
             }
 
-            // ==========================================
-            // 🛠️ 3. CORREÇÃO DA DATA (Tradutor de DD/MM/YYYY para YYYY-MM-DD)
-            // ==========================================
             let dataFormatada = new Date().toISOString().slice(0,10);
             if (exp.date) {
                 let dStr = exp.date.trim().substring(0, 10);
                 if (dStr.includes('/')) {
-                    // Se o iPhone mandou "15/06/2026", converte para "2026-06-15"
                     let partes = dStr.split('/');
-                    if (partes.length === 3 && partes[2].length === 4) {
-                        dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
-                    }
-                } else if (dStr.includes('-')) {
-                    dataFormatada = dStr; // Já veio correto (ex: 2026-06-15)
-                }
+                    if (partes.length === 3 && partes[2].length === 4) dataFormatada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+                } else if (dStr.includes('-')) dataFormatada = dStr; 
             }
 
-            // Cria o objeto exato que o sistema processa usando a dataFormatada
             const novaDespesa = {
               id: uniqueId,
               date: dataFormatada,
@@ -117,7 +251,7 @@ async function syncApplePayDireto() {
               amount: amountNumber,
               type: tipoGasto, 
               accountId: contaDestino,
-              method: exp.cartao || "Apple Pay", 
+              method: exp.cartao ? `Apple Pay (${exp.cartao})` : "Apple Pay", 
               category: categoriaGasto 
             };
 
@@ -128,58 +262,108 @@ async function syncApplePayDireto() {
          idsParaApagar.push(exp.id); 
       });
       
-      if(importados > 0) {
-          saveState(); 
-          updateAll(); 
-      }
+      if(importados > 0) { saveState(); updateAll(); }
 
       if (idsParaApagar.length > 0) {
         const idsFormatados = idsParaApagar.join(',');
-        await fetch(`${SUPABASE_URL}/rest/v1/pendentes?id=in.(${idsFormatados})`, {
-          method: "DELETE",
-          headers: HEADERS
-        });
-        if(importados > 0) alert(`💸 Sincronizado! ${importados} despesa(s) importada(s) do Apple Pay.`);
+        await fetch(`${SUPABASE_URL}/rest/v1/pendentes?id=in.(${idsFormatados})`, { method: "DELETE", headers: HEADERS });
+        if(importados > 0) alert(`💸 Apple Pay Sincronizado! ${importados} nova(s) despesa(s) na conta.`);
       }
     }
-  } catch (error) {
-    console.error("Erro na sincronização:", error);
-  }
+  } catch (error) { console.error("Erro na sincronização do Apple Pay:", error); }
 }
 
-/* ========================================================
-   CONTROLES DA INTERFACE (BOTÕES DE SINC E CHAVE)
-   ======================================================== */
+/* ==========================================
+   3. LISTENERS DOS BOTÕES
+   ========================================== */
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Sincronização Automática ao abrir a tela
-    setTimeout(syncApplePayDireto, 1000); 
+    
+    const elSyncDate = document.getElementById('last-email-sync');
+    if (elSyncDate) {
+        const lastSync = localStorage.getItem("lastEmailSync");
+        elSyncDate.textContent = lastSync ? lastSync : "Nunca realizado";
+    }
 
-    // 2. Botão de Trocar a Chave
-    const btnChangeKey = document.getElementById('btn-change-supa-key');
-    if (btnChangeKey) {
-        btnChangeKey.addEventListener('click', () => {
-            const currentKey = localStorage.getItem("secretSupaKey") || "";
-            const novaChave = prompt("🔑 Insira a nova Chave (Publishable/Anon) do Supabase:\n\n(Se quiser apagar a chave atual, deixe em branco e dê OK)", currentKey);
-            
-            if (novaChave !== null) { 
-                if (novaChave.trim() !== "") {
-                    localStorage.setItem("secretSupaKey", novaChave.trim());
-                    alert("✅ Chave atualizada com sucesso!");
+    const btnChangeGas = document.getElementById('btn-change-gas-url');
+    if (btnChangeGas) {
+        btnChangeGas.addEventListener('click', () => {
+            const currentUrl = localStorage.getItem("gasEmailUrl") || "";
+            const novaUrl = prompt("⚙️ Insira a URL do Google Apps Script (terminada em /exec):", currentUrl);
+            if (novaUrl !== null) { 
+                if (novaUrl.trim() !== "") {
+                    localStorage.setItem("gasEmailUrl", novaUrl.trim());
+                    alert("✅ URL configurada!");
                 } else {
-                    if (confirm("Você deixou o campo em branco. Tem certeza que deseja apagar a chave salva?")) {
-                        localStorage.removeItem("secretSupaKey");
-                        alert("🗑️ Chave apagada com sucesso!");
-                    }
+                    localStorage.removeItem("gasEmailUrl");
                 }
             }
         });
     }
 
-    // 3. Botão de Sincronizar Manualmente
+    const btnSyncEmail = document.getElementById('btn-sync-email');
+    if (btnSyncEmail) {
+        btnSyncEmail.addEventListener('click', async () => {
+            const GAS_URL = localStorage.getItem("gasEmailUrl");
+            if (!GAS_URL) {
+                alert("⚠️ A URL do Google Script não está configurada.");
+                return;
+            }
+
+            btnSyncEmail.textContent = "⏳ Procurando e-mail...";
+            btnSyncEmail.style.opacity = "0.7";
+
+            try {
+                const resposta = await fetch(GAS_URL, { redirect: "follow" });
+                const json = await resposta.json();
+
+                if (json.status === "success") {
+                    if (Array.isArray(json.data)) {
+                        json.data.forEach(csvText => processarCSV(csvText));
+                    } else {
+                        processarCSV(json.data);
+                    }
+                    
+                    const agora = new Date().toLocaleString('pt-BR');
+                    localStorage.setItem("lastEmailSync", agora);
+                    if (elSyncDate) elSyncDate.textContent = agora;
+                } else {
+                    alert(`ℹ️ Status: ${json.message}`);
+                }
+            } catch (erro) {
+                alert("❌ Erro ao conectar com o Google Script.");
+            } finally {
+                btnSyncEmail.textContent = "📩 Puxar do E-mail";
+                btnSyncEmail.style.opacity = "1";
+            }
+        });
+    }
+
+    const btnImportCsv = document.getElementById('btn-import-csv');
+    if (btnImportCsv) {
+        btnImportCsv.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                processarCSV(event.target.result);
+                e.target.value = ''; 
+            };
+            reader.readAsText(file);
+        });
+    }
+
     const btnSyncWallet = document.getElementById('btn-sync-wallet');
-    if (btnSyncWallet) {
-        btnSyncWallet.addEventListener('click', () => {
-            syncApplePayDireto(); 
+    if (btnSyncWallet) btnSyncWallet.addEventListener('click', syncApplePayDireto);
+
+    const btnChangeKey = document.getElementById('btn-change-supa-key');
+    if (btnChangeKey) {
+        btnChangeKey.addEventListener('click', () => {
+            const currentKey = localStorage.getItem("secretSupaKey") || "";
+            const novaChave = prompt("🔑 Insira a Chave (Publishable) do Supabase:", currentKey);
+            if (novaChave !== null) { 
+                if (novaChave.trim() !== "") localStorage.setItem("secretSupaKey", novaChave.trim());
+                else localStorage.removeItem("secretSupaKey");
+            }
         });
     }
 });
